@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Validation Pipeline</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0f1117;color:#e2e8f0;min-height:100vh;padding:24px}
+.container{max-width:900px;margin:0 auto}
+.header{text-align:center;margin-bottom:28px;padding:28px;background:linear-gradient(135deg,#1a1f2e,#16213e);border-radius:12px;border:1px solid #2d3748}
+.header h1{font-size:22px;font-weight:700;color:#63b3ed}
+.card{background:#1a1f2e;border:1px solid #2d3748;border-radius:12px;padding:24px;margin-bottom:20px}
+.card h2{font-size:12px;font-weight:600;color:#718096;margin-bottom:16px;text-transform:uppercase;letter-spacing:.06em}
+.upload-zone{border:2px dashed #4a5568;border-radius:10px;padding:44px;text-align:center;cursor:pointer;transition:all .2s;background:#0f1117}
+.upload-zone:hover,.upload-zone.dragover{border-color:#63b3ed;background:#1a2332}
+.upload-zone .icon{font-size:38px;margin-bottom:12px}
+.upload-zone h3{font-size:16px;color:#e2e8f0;margin-bottom:6px}
+.upload-zone p{font-size:13px;color:#718096}
+.upload-zone input{display:none}
+.file-info{display:none;margin-top:14px;padding:10px 16px;background:#0f1117;border-radius:8px;border:1px solid #2d3748;font-size:13px;color:#68d391}
+.btn{width:100%;padding:13px;border-radius:8px;font-size:15px;font-weight:600;border:none;cursor:pointer;transition:all .2s;margin-top:14px}
+.btn-primary{background:#3182ce;color:#fff}
+.btn-primary:hover:not(:disabled){background:#2b6cb0}
+.btn-primary:disabled{background:#2d3748;color:#4a5568;cursor:not-allowed}
+.status-bar{display:none;padding:10px 16px;border-radius:8px;font-size:13px;font-weight:500;margin-top:14px;text-align:center}
+.status-running{background:#1a2332;color:#63b3ed;border:1px solid #2b4c7e}
+.status-complete{background:#1a2e1a;color:#68d391;border:1px solid #2d5a2d}
+.status-failed{background:#2e1a1a;color:#fc8181;border:1px solid #5a2d2d}
+.progress-wrap{display:none;margin-top:12px}
+.progress-track{height:4px;background:#2d3748;border-radius:2px;overflow:hidden}
+.progress-bar{height:100%;width:0%;background:#63b3ed;border-radius:2px;transition:width .5s}
+#log-section{display:none}
+.log-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.log-header h2{margin-bottom:0}
+.log-hint{font-size:11px;color:#4a5568;font-style:italic}
+.terminal{background:#0a0e1a;border:1px solid #2d3748;border-radius:8px;padding:16px;height:340px;overflow-y:auto;font-family:"JetBrains Mono","Fira Code","Courier New",monospace;font-size:11.5px;line-height:1.75}
+.log-phase{color:#63b3ed;font-weight:600}
+.log-warning{color:#f6e05e}
+.log-error{color:#fc8181}
+.log-success{color:#68d391}
+.log-stat{color:#a0aec0;padding-left:14px}
+.log-sep{color:#2d3748}
+.log-default{color:#718096}
+#summary-section{display:none}
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+.stat-card{background:#0f1117;border-radius:8px;padding:16px;text-align:center;border:1px solid #2d3748}
+.stat-card .val{font-size:26px;font-weight:700;margin-bottom:4px}
+.stat-card .lbl{font-size:11px;color:#718096;text-transform:uppercase;letter-spacing:.05em}
+.c-green .val{color:#68d391}
+.c-yellow .val{color:#f6e05e}
+.c-red .val{color:#fc8181}
+.c-blue .val{color:#63b3ed}
+.dl-grid{display:flex;flex-direction:column;gap:10px}
+.dl-btn{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#0f1117;border:1px solid #2d3748;border-radius:8px;color:#e2e8f0;text-decoration:none;font-size:13px;font-weight:500;transition:all .15s}
+.dl-btn:hover{background:#1a2332;border-color:#4a5568}
+.dl-left{display:flex;align-items:center;gap:10px}
+.dl-icon{font-size:18px}
+.dl-meta{font-size:11px;color:#718096;margin-top:2px}
+.dl-arrow{color:#63b3ed;font-size:18px}
+.runtime{font-size:12px;color:#718096;text-align:center;margin-bottom:16px}
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="header">
+  <h1>Validation Pipeline</h1>
+</div>
+
+<div class="card">
+  <h2>Upload KML File</h2>
+  <div class="upload-zone" id="dropZone" onclick="document.getElementById('kmlInput').click()">
+    <div class="icon">📂</div>
+    <h3>Drop your KML file here</h3>
+    <p>or click to browse &nbsp;·&nbsp; only .kml files accepted</p>
+    <input type="file" id="kmlInput" accept=".kml">
+  </div>
+  <div class="file-info" id="fileInfo"></div>
+  <div class="status-bar" id="statusBar"></div>
+  <div class="progress-wrap" id="progWrap">
+    <div class="progress-track"><div class="progress-bar" id="progBar"></div></div>
+  </div>
+  <button class="btn btn-primary" id="runBtn" disabled onclick="runPipeline()">
+    ▶ &nbsp; Run Validation Pipeline
+  </button>
+</div>
+
+<div class="card" id="log-section">
+  <div class="log-header">
+    <h2>Live Pipeline Log</h2>
+    <span class="log-hint">per-plot detail suppressed · showing phase events only</span>
+  </div>
+  <div class="terminal" id="terminal"></div>
+</div>
+
+<div class="card" id="summary-section">
+  <h2>Validation Summary</h2>
+  <div class="stat-grid" id="statGrid"></div>
+  <div class="runtime" id="runtimeLine"></div>
+  <h2 style="margin-bottom:14px">Download Output Files</h2>
+  <div class="dl-grid" id="dlGrid"></div>
+</div>
+
+</div>
+<script>
+let selectedFile=null, currentRunId=null, logCount=0;
+
+// ── parsed stats extracted from the log stream ──────────────────────────────
+let parsed = {total:0, eligible:0, partial:0, ineligible:0, runtime:''};
+
+const kmlInput  = document.getElementById("kmlInput");
+const dropZone  = document.getElementById("dropZone");
+const fileInfo  = document.getElementById("fileInfo");
+const runBtn    = document.getElementById("runBtn");
+const statusBar = document.getElementById("statusBar");
+const progWrap  = document.getElementById("progWrap");
+const progBar   = document.getElementById("progBar");
+const terminal  = document.getElementById("terminal");
+const logSec    = document.getElementById("log-section");
+const sumSec    = document.getElementById("summary-section");
+const statGrid  = document.getElementById("statGrid");
+const dlGrid    = document.getElementById("dlGrid");
+const runtimeLine = document.getElementById("runtimeLine");
+
+kmlInput.addEventListener("change", e => handleFile(e.target.files[0]));
+dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("dragover"); });
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+dropZone.addEventListener("drop", e => {
+  e.preventDefault(); dropZone.classList.remove("dragover");
+  handleFile(e.dataTransfer.files[0]);
+});
+
+function handleFile(file) {
+  if (!file) return;
+  if (!file.name.toLowerCase().endsWith(".kml")) { alert("Please select a .kml file"); return; }
+  selectedFile = file;
+  const mb = (file.size / 1024 / 1024).toFixed(2);
+  fileInfo.style.display = "block";
+  fileInfo.textContent = "✓  " + file.name + "  (" + mb + " MB)";
+  runBtn.disabled = false;
+}
+
+async function runPipeline() {
+  if (!selectedFile) return;
+  runBtn.disabled = true;
+  terminal.innerHTML = "";
+  logCount = 0;
+  parsed = {total:0, eligible:0, partial:0, ineligible:0, runtime:''};
+  sumSec.style.display = "none";
+  logSec.style.display = "block";
+  progWrap.style.display = "block";
+  progBar.style.width = "8%";
+  setStatus("running", "Uploading KML file...");
+
+  const fd = new FormData();
+  fd.append("file", selectedFile);
+  let res;
+  try { res = await fetch("/upload", {method:"POST", body:fd}); }
+  catch(e) { setStatus("failed", "Upload failed: " + e.message); runBtn.disabled = false; return; }
+  if (!res.ok) {
+    const err = await res.json();
+    setStatus("failed", "Error: " + (err.detail || "Upload failed"));
+    runBtn.disabled = false; return;
+  }
+
+  const data = await res.json();
+  currentRunId = data.run_id;
+  setStatus("running", "Pipeline running — Run ID: " + data.run_id);
+  progBar.style.width = "15%";
+  streamLogs(currentRunId);
+}
+
+function streamLogs(runId) {
+  const es = new EventSource("/logs/" + runId);
+  es.onmessage = e => {
+    const msg = JSON.parse(e.data);
+    if (msg.done) {
+      es.close();
+      progBar.style.width = "100%";
+      setTimeout(() => { progWrap.style.display = "none"; }, 800);
+      return;
+    }
+    if (msg.status === "complete") {
+      setStatus("complete", "Pipeline complete — all files ready for download");
+      renderSummary(msg.summary, msg.outputs);
+      return;
+    }
+    if (msg.status === "failed") {
+      setStatus("failed", "Pipeline failed — check logs above");
+      runBtn.disabled = false;
+      return;
+    }
+    if (msg.line) {
+      processLine(msg.line);
+      progBar.style.width = Math.min(15 + logCount * 0.35, 94) + "%";
+    }
+  };
+  es.onerror = () => { es.close(); setStatus("failed", "Connection lost"); };
+}
+
+// ── log line processing ──────────────────────────────────────────────────────
+
+function stripAnsi(s) {
+  // Remove ESC[ sequences and bare [ sequences (loguru with no real ESC char)
+  return s.replace(/\x1b\[[0-9;]*m/g, '').replace(/\[[0-9;]*m/g, '');
+}
+
+function removePyPrefix(s) {
+  // Remove: "2026-05-14 04:56:40 | INFO  | module.path:func_name | "
+  return s.replace(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \| \w+\s+\| [^|]+ \| /, '').trim();
+}
+
+function cleanLine(raw) {
+  return removePyPrefix(stripAnsi(raw)).trim();
+}
+
+// Patterns that make a cleaned line worth showing in the terminal
+const SHOW = [
+  /^Pipeline started/,
+  /^KML file:/,
+  /^>>>/,
+  /PIPELINE COMPLETE/,
+  /^Total plots(?:\s+processed)?:\s+[\d,]+/,
+  /^Total runtime:/,
+  /Total raw features in file:/,
+  /Loaded OK:/,
+  /degenerate geometr/i,
+  /^Area stats/,
+  /Null geometr/i,
+  /Invalid geometr/i,
+  /Non-simple geometr/i,
+  /Sliver geometr/i,
+  /^\s*FAIL\s+[\d,]+\s+plots?/,
+  /^\s*PASS\s+[\d,]+\s+plots?/,
+  /^\s*WARNING\s+[\d,]+\s+plots?/,
+  /Primary format/,
+  /Alternate format/,
+  /Unknown format/,
+  /IDs with special/,
+  /Duplicate plots:/,
+  /Unique IDs:/,
+  /Centroid duplicate pairs/,
+  /Overlap pairs found:/,
+  /Minor (?:overlap )?\(/,
+  /Significant (?:overlap )?\(/,
+  /Major (?:overlap )?\(/,
+  /Plots with overlap:/,
+  /Valid geometries for overlap:/,
+  /^\s*ELIGIBLE\s+[\d,]+/,
+  /^\s*INELIGIBLE\s+[\d,]+/,
+  /^\s*PARTIALLY_ELIGIBLE\s+[\d,]+/,
+  /^\s*NEEDS_REVIEW\s+[\d,]+/,
+  /^\s*1[A-F] /,          // phase results table rows
+  /^OUTPUT:/,
+];
+
+function shouldShow(line) {
+  if (!line) return false;
+  return SHOW.some(p => p.test(line));
+}
+
+// Extract eligibility counts from the log as they stream — this is the fix
+// for the "Total Plots = 0" bug: don't rely solely on msg.summary from server.
+function extractStats(line) {
+  let m;
+  if ((m = line.match(/Total plots(?:\s+processed)?:\s+([\d,]+)/i)))
+    parsed.total = parseInt(m[1].replace(/,/g, ''));
+  if ((m = line.match(/^\s*ELIGIBLE\s+([\d,]+)\s+plots/)))
+    parsed.eligible = parseInt(m[1].replace(/,/g, ''));
+  if ((m = line.match(/^\s*INELIGIBLE\s+([\d,]+)\s+plots/)))
+    parsed.ineligible = parseInt(m[1].replace(/,/g, ''));
+  if ((m = line.match(/^\s*PARTIALLY_ELIGIBLE\s+([\d,]+)\s+plots/)))
+    parsed.partial = parseInt(m[1].replace(/,/g, ''));
+  if ((m = line.match(/Total runtime:\s+(.+)/i)))
+    parsed.runtime = m[1].trim();
+  // Also pick up total from the ingestion phase
+  if ((m = line.match(/Total raw features in file:\s+([\d,]+)/i)))
+    if (!parsed.total) parsed.total = parseInt(m[1].replace(/,/g, ''));
+}
+
+function processLine(raw) {
+  const line = cleanLine(raw);
+  extractStats(line);               // always parse stats
+  if (!shouldShow(line)) return;    // filter noise
+
+  logCount++;
+  const div = document.createElement("div");
+
+  // Classify for colour
+  if (/^>>>/.test(line))                                       div.className = "log-phase";
+  else if (/PIPELINE COMPLETE|ELIGIBLE|INELIGIBLE|PARTIALLY/. test(line)) div.className = "log-success";
+  else if (/FAIL\s+[\d,]+|WARNING\s+[\d,]+/.test(line))       div.className = "log-warning";
+  else if (/ERROR|FAILED/.test(line))                          div.className = "log-error";
+  else if (/^\s*(PASS|FAIL|WARNING)\s+[\d,]+/.test(line))     div.className = "log-stat";
+  else if (/^={4}|^-{4}/.test(line))                          div.className = "log-sep";
+  else                                                          div.className = "log-stat";
+
+  // Lightly indent stat lines under a phase
+  if (!/^>>>|PIPELINE COMPLETE/.test(line)) {
+    div.style.paddingLeft = "14px";
+  }
+
+  div.textContent = line;
+  terminal.appendChild(div);
+  terminal.scrollTop = terminal.scrollHeight;
+}
+
+function setStatus(type, msg) {
+  statusBar.style.display = "block";
+  statusBar.className = "status-bar status-" + type;
+  const icons = {running:"⚙️", complete:"✅", failed:"❌"};
+  statusBar.textContent = (icons[type] || "") + " " + msg;
+}
+
+function renderSummary(s, outputs) {
+  sumSec.style.display = "block";
+
+  // Use parsed stream values as primary source; fall back to server summary
+  const total      = parsed.total      || (s && s.total)      || 0;
+  const eligible   = parsed.eligible   || (s && s.eligible)   || 0;
+  const partial    = parsed.partial    || (s && s.partial)     || 0;
+  const ineligible = parsed.ineligible || (s && s.ineligible)  || 0;
+  const runtime    = parsed.runtime    || (s && s.runtime)     || '';
+
+  statGrid.innerHTML = `
+    <div class="stat-card c-blue">
+      <div class="val">${total.toLocaleString()}</div>
+      <div class="lbl">Total Plots</div>
+    </div>
+    <div class="stat-card c-green">
+      <div class="val">${eligible.toLocaleString()}</div>
+      <div class="lbl">Eligible</div>
+    </div>
+    <div class="stat-card c-yellow">
+      <div class="val">${partial.toLocaleString()}</div>
+      <div class="lbl">Partially Eligible</div>
+    </div>
+    <div class="stat-card c-red">
+      <div class="val">${ineligible.toLocaleString()}</div>
+      <div class="lbl">Ineligible</div>
+    </div>
+  `;
+
+  if (runtime) runtimeLine.textContent = "Total runtime: " + runtime;
+
+  const icons = {xlsx:"📊", html:"🗺️", gpkg:"📍", csv:"📄", json:"📋"};
+  dlGrid.innerHTML = "";
+  (outputs || []).forEach(f => {
+    const ext = f.filename.split(".").pop();
+    const a = document.createElement("a");
+    a.className = "dl-btn";
+    a.href = f.url;
+    a.download = f.filename;
+    a.innerHTML = `
+      <div class="dl-left">
+        <span class="dl-icon">${icons[ext] || "📁"}</span>
+        <div>
+          <div>${f.label}</div>
+          <div class="dl-meta">${f.filename} &nbsp;·&nbsp; ${f.size_mb} MB</div>
+        </div>
+      </div>
+      <span class="dl-arrow">↓</span>`;
+    dlGrid.appendChild(a);
+  });
+
+  sumSec.scrollIntoView({behavior:"smooth"});
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+# ── core GIS ─────────────────────────────────────────────────────────────────
+geopandas>=0.14.0
+shapely>=2.0.0
+fiona>=1.9.0
+pyproj>=3.6.0
+
+# ── data processing ───────────────────────────────────────────────────────────
+pandas>=2.1.0
+numpy>=1.26.0
+openpyxl>=3.1.0          # Excel report generation
+
+# ── visualisation ─────────────────────────────────────────────────────────────
+folium>=0.15.0            # interactive HTML map
+
+# ── web server ────────────────────────────────────────────────────────────────
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.9   # file upload support
+
+# ── utilities ─────────────────────────────────────────────────────────────────
+loguru>=0.7.0
+pyyaml>=6.0

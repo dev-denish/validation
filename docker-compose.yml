@@ -1,0 +1,41 @@
+services:
+  awd-validation:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: awd-validation
+    volumes:
+      - ./data:/app/data
+      - ./src:/app/src
+      - ./scripts:/app/scripts
+      - ./config:/app/config
+      - ./notebooks:/app/notebooks
+      - ./logs:/app/logs
+      - ./tests:/app/tests
+    environment:
+      - PYTHONPATH=/app/src
+    ports:
+      - "8000:8000"
+    stdin_open: true
+    tty: true
+    depends_on:
+      postgis:
+        condition: service_healthy
+  postgis:
+    image: postgis/postgis:16-3.4
+    container_name: awd-postgis
+    environment:
+      POSTGRES_DB: awd_validation
+      POSTGRES_USER: awd_user
+      POSTGRES_PASSWORD: awd_secure_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgis_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U awd_user -d awd_validation"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+volumes:
+  postgis_data:

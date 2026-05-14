@@ -1,0 +1,57 @@
+project:
+  name: "AWD Farm Plot Validation"
+  version: "1.0.0"
+  standard: "VCS v5.0"
+
+input:
+  filename: "farms_kmlFile.kml"
+  layer: "Layer #0"
+  raw_dir: "/app/data/raw"
+  interim_dir: "/app/data/interim"
+  processed_dir: "/app/data/processed"
+  outputs_dir: "/app/data/outputs"
+
+crs:
+  input_epsg: 4326
+  working_epsg: 32643
+  output_epsg: 4326
+
+schema:
+  unique_id_field: "Name"
+  description_field: "Description"
+  id_pattern: "^[0-9]+-[0-9]+-[A-Z]+-[0-9]+$"
+  alternate_id_pattern: "^FAM[A-Z0-9]+$"
+
+thresholds:
+  # min/max area thresholds removed — awaiting AWD methodology
+  # confirmation from Jibotosh on minimum plot size
+  # Will be added back once confirmed
+  overlap_area_pct: 0.01        # >1% = real overlap, <1% = digitization noise
+  sliver_area_ha: 0.001         # 10 sqm — geometry artifact threshold
+  centroid_distance_m: 5.0      # spatial duplicate detection radius
+
+checks:
+  geometry_validity: true
+  self_intersection: true
+  degenerate_geometry: true
+  spatial_overlap: true
+  locational_duplicate: true
+  unique_id_duplicate: true
+  area_threshold: false         # disabled — awaiting methodology confirmation
+
+unique_id:
+  field_name: "Name"
+  primary_pattern: "^[0-9]+-[0-9]+-[A-Z]+-[0-9]+$"
+  alternate_pattern: "^FAM[A-Z0-9]+$"
+
+logging:
+  level: "INFO"
+  log_dir: "/app/logs"
+
+database:
+  host: "postgis"
+  port: 5432
+  name: "awd_validation"
+  user: "awd_user"
+  password: "awd_secure_pass"
+  schema: "awd"
