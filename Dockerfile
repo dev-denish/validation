@@ -39,4 +39,4 @@ COPY . .
 # Create logs directory
 RUN mkdir -p /app/logs
 
-CMD ["bash"]
+CMD ["uvicorn", "awd_validation.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
