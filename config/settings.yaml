@@ -83,7 +83,7 @@ phase2:
     enabled: true
     roads_layer_path: "/app/data/raw/roads.gpkg"
     roads_buffer_m: 5                 # 5m buffer around road centrelines
-    railways_layer_path: null         # No OSM railway layer downloaded
+    railways_layer_path: "/app/data/raw/railways.gpkg"
     railways_buffer_m: 10             # 10m buffer around railway centrelines
     settlements_layer_path: "/app/data/raw/settlements.gpkg"
     settlements_buffer_m: 0           # Direct intersection, no buffer
