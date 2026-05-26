@@ -17,6 +17,10 @@ fastapi>=0.109.0
 uvicorn[standard]>=0.27.0
 python-multipart>=0.0.9   # file upload support
 
+# ── OSM / network data ────────────────────────────────────────────────────────
+osmnx>=1.9.0
+rtree>=1.0.0
+
 # ── utilities ─────────────────────────────────────────────────────────────────
 loguru>=0.7.0
 pyyaml>=6.0
