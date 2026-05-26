@@ -18,11 +18,12 @@ import glob
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Tuple
+from typing import Optional, Tuple
 
 import geopandas as gpd
 import pandas as pd
 from loguru import logger
+from shapely.ops import unary_union
 from shapely.validation import make_valid
 
 
@@ -55,6 +56,8 @@ class ForestOverlapChecker:
             "definition_source", "pending"
         )
         self.cdm_min_area_ha = self.forest_cfg.get("cdm_min_area_ha", 0.5)
+        self.hansen_layer_path = self.forest_cfg.get("hansen_layer_path")
+        self.hansen_enabled = self.forest_cfg.get("hansen_enabled", False)
 
     def run(self, run_id: str) -> Tuple[gpd.GeoDataFrame, dict]:
         logger.info("=" * 60)
@@ -93,8 +96,9 @@ class ForestOverlapChecker:
             }
         else:
             self._validate_definition_source(report)
-            forest_gdf = self._load_forest_layer(report)
-            gdf = self._check_forest_overlap(gdf, forest_gdf, report)
+            forest_rfa = self._load_forest_layer(report)
+            forest_hansen = self._load_hansen_layer(report)
+            gdf = self._check_forest_overlap(gdf, forest_rfa, forest_hansen, report)
 
         self._write_output(gdf, run_id)
         self._write_json_report(report, run_id)
@@ -179,6 +183,37 @@ class ForestOverlapChecker:
         }
         return forest_gdf
 
+    def _load_hansen_layer(self, report: dict) -> Optional[gpd.GeoDataFrame]:
+        """Load Hansen canopy cover vector layer (polygonized GeoPackage)."""
+        if not self.hansen_enabled or not self.hansen_layer_path:
+            logger.info("Hansen canopy layer disabled or path not set — skipping")
+            return None
+        layer_path = Path(self.hansen_layer_path)
+        if not layer_path.exists():
+            logger.warning(f"Hansen layer not found: {layer_path} — skipping")
+            return None
+        logger.info(f"Loading Hansen canopy layer: {layer_path.name}")
+        hansen_gdf = gpd.read_file(layer_path)
+        if hansen_gdf.crs.to_epsg() != self.WORKING_EPSG:
+            hansen_gdf = hansen_gdf.to_crs(epsg=self.WORKING_EPSG)
+        invalid = (~hansen_gdf.geometry.is_valid).sum()
+        if invalid > 0:
+            logger.warning(
+                f"Hansen layer: {invalid} invalid geometries — fixing with make_valid"
+            )
+            hansen_gdf["geometry"] = hansen_gdf.geometry.apply(make_valid)
+        logger.info(
+            f"Hansen canopy layer loaded: {len(hansen_gdf):,} polygons "
+            f"(≥10% canopy cover, ≥1.0 ha)"
+        )
+        report["hansen_layer"] = {
+            "path": str(layer_path),
+            "polygons": len(hansen_gdf),
+            "threshold_canopy_pct": 10,
+            "min_area_ha": 1.0,
+        }
+        return hansen_gdf
+
     # ── CHECKS ────────────────────────────────────────────────────────────
 
     def _validate_definition_source(self, report: dict) -> None:
@@ -199,89 +234,131 @@ class ForestOverlapChecker:
     def _check_forest_overlap(
         self,
         plots: gpd.GeoDataFrame,
-        forest: gpd.GeoDataFrame,
+        forest_rfa: Optional[gpd.GeoDataFrame],
+        forest_hansen: Optional[gpd.GeoDataFrame],
         report: dict,
     ) -> gpd.GeoDataFrame:
         """
-        Overlay plots with forest layer and calculate overlap area per plot.
+        Overlay plots with both RFA and Hansen forest layers (union approach).
 
-        Uses spatial join + intersection for efficiency on 19k-31k plots.
+        A plot is flagged if it overlaps EITHER layer. Overlap area is computed
+        from the geometric union of both layers to avoid double-counting where
+        they coincide. Adds forest_overlap_source: RFA | Hansen | Both | None.
         """
-        logger.info("Calculating forest overlap for all plots...")
+        logger.info("Calculating forest overlap (RFA + Hansen union approach)...")
         plots = plots.copy()
 
-        # Initialise columns
         plots["chk_forest_overlap"] = False
         plots["forest_overlap_ha"] = 0.0
         plots["forest_overlap_pct"] = 0.0
+        plots["forest_overlap_source"] = "None"
         plots["forest_definition_source"] = self.definition_source
 
-        # Spatial join to find candidate pairs (fast)
-        logger.info("Running spatial index join...")
+        # Build combined layer tagged by source
+        layer_gdfs = []
+        if forest_rfa is not None and len(forest_rfa) > 0:
+            rfa = forest_rfa[["geometry"]].copy()
+            rfa["_src"] = "RFA"
+            layer_gdfs.append(rfa)
+        if forest_hansen is not None and len(forest_hansen) > 0:
+            han = forest_hansen[["geometry"]].copy()
+            han["_src"] = "Hansen"
+            layer_gdfs.append(han)
+
+        if not layer_gdfs:
+            logger.info("No forest layers available — all plots pass")
+            plots["phase_2a_status"] = "PASS"
+            report["checks"]["forest_overlap"] = {
+                "status": "PASS", "plots_with_overlap": 0, "total_overlap_ha": 0.0,
+            }
+            return plots
+
+        combined = gpd.pd.concat(layer_gdfs, ignore_index=True)
+        src_labels = combined["_src"].unique().tolist()
+        logger.info(
+            f"Combined forest layer: {len(combined):,} polygons "
+            f"(sources: {', '.join(src_labels)})"
+        )
+
+        logger.info("Running spatial index join against combined forest layer...")
         joined = gpd.sjoin(
             plots[["plot_id", "area_ha", "geometry"]],
-            forest[["geometry"]],
+            combined[["_src", "geometry"]],
             how="inner",
             predicate="intersects",
         )
 
         if len(joined) == 0:
             logger.info("No forest overlaps found")
-            report["checks"]["forest_overlap"] = {
-                "status": "PASS",
-                "plots_with_overlap": 0,
-                "total_overlap_ha": 0.0,
-            }
             plots["phase_2a_status"] = "PASS"
+            report["checks"]["forest_overlap"] = {
+                "status": "PASS", "plots_with_overlap": 0, "total_overlap_ha": 0.0,
+            }
             return plots
 
-        # Calculate exact intersection areas
         logger.info(
             f"Computing exact intersections for {len(joined):,} candidate pairs..."
         )
-        overlap_areas: dict = {}
+
         for plot_id, group in joined.groupby("plot_id"):
-            plot_geom = plots.loc[
-                plots["plot_id"] == plot_id, "geometry"
-            ].values[0]
-            total_overlap_m2 = 0.0
-            for idx in group.index_right:
-                forest_geom = forest.loc[idx, "geometry"]
+            mask = plots["plot_id"] == plot_id
+            plot_geom = plots.loc[mask, "geometry"].values[0]
+            plot_area_ha = plots.loc[mask, "area_ha"].values[0]
+
+            sources_hit: set[str] = set()
+            intersection_geoms = []
+
+            for idx in group["index_right"]:
+                forest_geom = combined.loc[idx, "geometry"]
+                src = combined.loc[idx, "_src"]
                 intersection = plot_geom.intersection(forest_geom)
                 if not intersection.is_empty:
-                    total_overlap_m2 += intersection.area
-            overlap_areas[plot_id] = total_overlap_m2 / 10000  # → ha
+                    intersection_geoms.append(intersection)
+                    sources_hit.add(src)
 
-        # Apply results back to plots
-        for plot_id, overlap_ha in overlap_areas.items():
-            mask = plots["plot_id"] == plot_id
-            plot_area_ha = plots.loc[mask, "area_ha"].values[0]
+            if not intersection_geoms:
+                continue
+
+            # Union all intersections — avoids double-counting where RFA and
+            # Hansen overlap the same area within a plot
+            total_intersection = unary_union(intersection_geoms)
+            overlap_ha = total_intersection.area / 10000
             overlap_pct = (
-                (overlap_ha / plot_area_ha * 100)
-                if plot_area_ha > 0 else 0.0
+                (overlap_ha / plot_area_ha * 100) if plot_area_ha > 0 else 0.0
             )
+
+            if "RFA" in sources_hit and "Hansen" in sources_hit:
+                source = "Both"
+            elif "RFA" in sources_hit:
+                source = "RFA"
+            else:
+                source = "Hansen"
+
             plots.loc[mask, "forest_overlap_ha"] = round(overlap_ha, 6)
             plots.loc[mask, "forest_overlap_pct"] = round(overlap_pct, 2)
             plots.loc[mask, "chk_forest_overlap"] = overlap_ha > 0
+            plots.loc[mask, "forest_overlap_source"] = source
 
         plots_with_overlap = int(plots["chk_forest_overlap"].sum())
         total_overlap_ha = round(float(plots["forest_overlap_ha"].sum()), 4)
+        source_counts = (
+            plots.loc[plots["chk_forest_overlap"], "forest_overlap_source"]
+            .value_counts()
+            .to_dict()
+        )
 
-        logger.info(f"Forest overlap results:")
-        logger.info(f"  Plots with forest overlap: {plots_with_overlap:,}")
-        logger.info(f"  Total overlap area:        {total_overlap_ha:,} ha")
-
-        for pid in plots.loc[plots["chk_forest_overlap"], "plot_id"].values[:10]:
-            row = plots.loc[plots["plot_id"] == pid].iloc[0]
-            logger.warning(
-                f"  FOREST OVERLAP — plot_id: {pid} | "
-                f"{row['forest_overlap_ha']:.4f} ha ({row['forest_overlap_pct']:.1f}%)"
-            )
+        logger.info("Forest overlap results:")
+        logger.info(f"  Plots with overlap:  {plots_with_overlap:,}")
+        logger.info(f"  Total overlap area:  {total_overlap_ha:,} ha")
+        logger.info(f"  Source — RFA only:   {source_counts.get('RFA', 0):,}")
+        logger.info(f"  Source — Hansen only:{source_counts.get('Hansen', 0):,}")
+        logger.info(f"  Source — Both:       {source_counts.get('Both', 0):,}")
 
         report["checks"]["forest_overlap"] = {
             "status": "PASS" if plots_with_overlap == 0 else "FAIL",
             "plots_with_overlap": plots_with_overlap,
             "total_overlap_ha": total_overlap_ha,
+            "source_breakdown": source_counts,
             "definition_source": self.definition_source,
         }
 
@@ -300,6 +377,7 @@ class ForestOverlapChecker:
         gdf["chk_forest_overlap"] = False
         gdf["forest_overlap_ha"] = 0.0
         gdf["forest_overlap_pct"] = 0.0
+        gdf["forest_overlap_source"] = "None"
         gdf["forest_definition_source"] = "pending"
         gdf["phase_2a_status"] = "SKIPPED"
         return gdf
@@ -342,7 +420,8 @@ class ForestOverlapChecker:
         cols = [
             "plot_id", "area_ha", "phase_2a_status",
             "chk_forest_overlap", "forest_overlap_ha",
-            "forest_overlap_pct", "forest_definition_source",
+            "forest_overlap_pct", "forest_overlap_source",
+            "forest_definition_source",
         ]
         available = [c for c in cols if c in gdf.columns]
         path = self.outputs_dir / f"2A_forest_report_{run_id}.csv"
