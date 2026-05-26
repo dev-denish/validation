@@ -69,6 +69,8 @@ phase2:
     definition_source: "maharashtra_fsi"
     layer_path: "/app/data/raw/forest_maharashtra_rfa.gpkg"
     attribute_field: "st_name"
+    hansen_layer_path: "/app/data/raw/forest_hansen_canopy.gpkg"
+    hansen_enabled: true
     # CDM DNA fallback thresholds (UNFCCC default)
     cdm_canopy_pct: 10
     cdm_height_m: 5
@@ -87,7 +89,7 @@ phase2:
     railways_buffer_m: 10             # 10m buffer around railway centrelines
     settlements_layer_path: "/app/data/raw/settlements.gpkg"
     settlements_buffer_m: 0           # Direct intersection, no buffer
-    buildings_layer_path: null        # Not downloaded — settlements layer used
+    buildings_layer_path: "/app/data/raw/buildings.gpkg"
     buildings_buffer_m: 0             # Direct intersection, no buffer
 
   eligibility:
