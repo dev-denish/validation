@@ -28,7 +28,7 @@ thresholds:
   # Will be added back once confirmed
   overlap_area_pct: 0.01        # >1% = real overlap, <1% = digitization noise
   sliver_area_ha: 0.001         # 10 sqm — geometry artifact threshold
-  centroid_distance_m: 5.0      # spatial duplicate detection radius
+  centroid_distance_m: 2.0      # spatial duplicate detection radius
 
 checks:
   geometry_validity: true
@@ -55,3 +55,45 @@ database:
   user: "awd_user"
   password: "awd_secure_pass"
   schema: "awd"
+# ─────────────────────────────────────────────────────────────────────────────
+# PHASE 2 — ELIGIBILITY CROSS-CHECK CONFIGURATION
+# Add this block to the bottom of config/settings.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+
+phase2:
+  # Input: reads from Phase 1F valid_plots output
+  input_source: "phase1f_valid"
+
+  forest:
+    enabled: true
+    definition_source: "maharashtra_fsi"
+    layer_path: "/app/data/raw/forest_maharashtra_rfa.gpkg"
+    attribute_field: "st_name"
+    # CDM DNA fallback thresholds (UNFCCC default)
+    cdm_canopy_pct: 10
+    cdm_height_m: 5
+    cdm_min_area_ha: 1.0
+
+  water_bodies:
+    enabled: true
+    layer_path: "/app/data/raw/water_bodies.gpkg"
+    min_area_ha: 0.5                  # Only permanent water bodies > 0.5 ha
+
+  infrastructure:
+    enabled: true
+    roads_layer_path: "/app/data/raw/roads.gpkg"
+    roads_buffer_m: 5                 # 5m buffer around road centrelines
+    railways_layer_path: null         # No OSM railway layer downloaded
+    railways_buffer_m: 10             # 10m buffer around railway centrelines
+    settlements_layer_path: "/app/data/raw/settlements.gpkg"
+    settlements_buffer_m: 0           # Direct intersection, no buffer
+    buildings_layer_path: null        # Not downloaded — settlements layer used
+    buildings_buffer_m: 0             # Direct intersection, no buffer
+
+  eligibility:
+    # PENDING — awaiting Jibotosh confirmation on minimum % to retain a plot
+    partial_threshold_pct: null
+    # Flag plots losing more than 25% of area for manual review
+    review_threshold_pct: 75
+    # Carbon adjustment factor precision
+    adjustment_factor_decimals: 4
