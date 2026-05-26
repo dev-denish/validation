@@ -22,6 +22,10 @@ LAYERS = {
         "output": RAW_DIR / "roads.gpkg",
         "tags": {"highway": True},
     },
+    "railways": {
+        "output": RAW_DIR / "railways.gpkg",
+        "tags": {"railway": True},
+    },
     "water_bodies": {
         "output": RAW_DIR / "water_bodies.gpkg",
         "tags": {
