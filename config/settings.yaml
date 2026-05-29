@@ -92,7 +92,7 @@ phase2:
     railways_buffer_m: 10             # 10m buffer around railway centrelines
     settlements_layer_path: "/app/data/raw/settlements.gpkg"
     settlements_buffer_m: 0           # Direct intersection, no buffer
-    buildings_layer_path: "/app/data/raw/buildings.gpkg"
+    buildings_layer_path: "/app/data/raw/buildings_merged.gpkg"
     buildings_buffer_m: 0             # Direct intersection, no buffer
 
   eligibility:
