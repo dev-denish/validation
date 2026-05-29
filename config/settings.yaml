@@ -69,7 +69,7 @@ phase2:
     definition_source: "maharashtra_fsi"
     layer_path: "/app/data/raw/forest_maharashtra_rfa.gpkg"
     attribute_field: "st_name"
-    hansen_layer_path: "/app/data/raw/forest_hansen_canopy.gpkg"
+    hansen_layer_path: "/app/data/raw/forest_hansen_canopy_2023.gpkg"
     hansen_enabled: true
     # CDM DNA fallback thresholds (UNFCCC default)
     cdm_canopy_pct: 10
