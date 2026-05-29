@@ -80,6 +80,9 @@ phase2:
     enabled: true
     layer_path: "/app/data/raw/water_bodies.gpkg"
     min_area_ha: 0.5                  # Only permanent water bodies > 0.5 ha
+    jrc_layer_path: "/app/data/raw/water_jrc_permanent.gpkg"
+    jrc_enabled: true
+    jrc_occurrence_threshold: 75      # JRC pixel >= 75% occurrence = permanent
 
   infrastructure:
     enabled: true
