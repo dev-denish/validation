@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWD Validation · Maharashtra</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700;800&family=Barlow:wght@300;400;500&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+button{font:inherit;cursor:pointer;border:none;background:none}
+input{font:inherit}
+
+:root{
+  --bg-void:#040a14;
+  --bg-base:#070f1e;
+  --bg-surface:#0c1627;
+  --bg-elevated:#111f35;
+  --bg-hover:#162540;
+  --border-sub:#162033;
+  --border:#1c2e48;
+  --border-hi:#27415e;
+  --green:#00d4a1;
+  --green-dim:#008f6d;
+  --green-glow:rgba(0,212,161,.12);
+  --amber:#f5a623;
+  --amber-glow:rgba(245,166,35,.12);
+  --blue:#4e91f0;
+  --blue-glow:rgba(78,145,240,.12);
+  --red:#ff4c5e;
+  --red-glow:rgba(255,76,94,.12);
+  --purple:#a78bfa;
+  --orange:#f97316;
+  --t-bright:#edf2ff;
+  --t-primary:#c5d5ec;
+  --t-secondary:#7a96b5;
+  --t-muted:#3a5070;
+  --t-dim:#1e3050;
+  --font-head:'Barlow Condensed',system-ui,sans-serif;
+  --font-body:'Barlow',system-ui,sans-serif;
+  --font-mono:'Share Tech Mono',monospace;
+  --r:6px;
+  --rl:10px;
+}
+
+html,body{height:100%;background:var(--bg-void);color:var(--t-primary);font-family:var(--font-body);font-size:13px;line-height:1.5;overflow:hidden}
+
+/* SHELL */
+.shell{display:grid;grid-template-rows:52px 1fr;grid-template-columns:216px 1fr 264px;height:100vh;overflow:hidden}
+
+/* HEADER */
+.header{grid-column:1/-1;display:flex;align-items:center;padding:0 18px;background:var(--bg-base);border-bottom:1px solid var(--border-sub);gap:20px}
+.brand{display:flex;align-items:baseline;gap:10px;flex-shrink:0}
+.brand-awd{font-family:var(--font-head);font-size:24px;font-weight:800;color:var(--green);letter-spacing:3px}
+.brand-sub{font-family:var(--font-head);font-size:11px;font-weight:600;letter-spacing:3.5px;color:var(--t-dim)}
+.hdiv{width:1px;height:28px;background:var(--border);flex-shrink:0}
+.meta{display:flex;align-items:center;gap:14px;flex:1;min-width:0}
+.chip{font-family:var(--font-mono);font-size:10.5px;color:var(--t-secondary);letter-spacing:.5px;white-space:nowrap}
+.chip em{color:var(--t-dim);font-style:normal;margin-right:4px}
+.chip.run{color:var(--green-dim)}
+.hactions{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.spill{display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:20px;border:1px solid var(--border);font-family:var(--font-head);font-size:10px;font-weight:700;letter-spacing:2px;color:var(--t-secondary)}
+.sdot{width:7px;height:7px;border-radius:50%;background:var(--t-muted)}
+.sdot.idle{background:var(--green);animation:pg 2s ease-in-out infinite}
+.sdot.running{background:var(--amber);animation:pa 1s ease-in-out infinite}
+.sdot.error{background:var(--red)}
+@keyframes pg{0%,100%{box-shadow:0 0 0 0 rgba(0,212,161,.5)}50%{box-shadow:0 0 0 5px rgba(0,212,161,0)}}
+@keyframes pa{0%,100%{box-shadow:0 0 0 0 rgba(245,166,35,.5)}50%{box-shadow:0 0 0 5px rgba(245,166,35,0)}}
+.btn{padding:7px 14px;border-radius:var(--r);font-family:var(--font-head);font-size:12px;font-weight:700;letter-spacing:1px;transition:all .15s}
+.btn-g{border:1px solid var(--border-hi);color:var(--t-secondary)}
+.btn-g:hover{border-color:var(--green-dim);color:var(--green);background:var(--green-glow)}
+.btn-p{background:var(--green);color:var(--bg-void)}
+.btn-p:hover{background:#00ead1}
+.btn-p:active{transform:scale(.97)}
+
+/* SIDEBAR */
+.sidebar{display:flex;flex-direction:column;background:var(--bg-base);border-right:1px solid var(--border-sub);overflow-y:auto;padding:14px 0}
+.sidebar::-webkit-scrollbar{width:3px}
+.sidebar::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.ss{padding:0 10px 18px}
+.slabel{font-family:var(--font-head);font-size:10px;font-weight:700;letter-spacing:2.5px;color:var(--t-dim);padding:0 8px 8px;display:block}
+.nitem{display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;border-radius:var(--r);font-family:var(--font-head);font-size:12.5px;font-weight:600;letter-spacing:.5px;color:var(--t-muted);transition:all .15s;border:1px solid transparent}
+.nitem:hover{background:var(--bg-elevated);color:var(--t-secondary)}
+.nitem.active{background:var(--green-glow);color:var(--green);border-color:rgba(0,212,161,.2)}
+.nitem .nd{width:5px;height:5px;border-radius:50%;background:var(--t-dim);flex-shrink:0}
+.nitem.active .nd{background:var(--green)}
+.sdiv{height:1px;background:var(--border-sub);margin:2px 10px 18px}
+.pbtn{width:100%;padding:9px 10px;border-radius:var(--r);border:1px solid var(--border);font-family:var(--font-head);font-size:12px;font-weight:700;letter-spacing:1px;color:var(--t-secondary);text-align:left;display:flex;align-items:center;gap:8px;margin-bottom:5px;transition:all .15s}
+.pbtn:hover{border-color:var(--border-hi);color:var(--t-primary);background:var(--bg-elevated)}
+.pbtn.pp{border-color:var(--green-dim);color:var(--green)}
+.pbtn.pp:hover{background:var(--green-glow)}
+.pbtn .arr{margin-left:auto;opacity:.4}
+.srow{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border-sub)}
+.srow:last-child{border-bottom:none}
+.sl{font-size:11px;color:var(--t-muted)}
+.sv{font-family:var(--font-mono);font-size:11.5px;color:var(--t-primary)}
+.sv.g{color:var(--green)}
+.sv.a{color:var(--amber)}
+
+/* CONTENT */
+.content{overflow-y:auto;background:var(--bg-void);padding:18px 18px 32px}
+.content::-webkit-scrollbar{width:4px}
+.content::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.tp{display:none}
+.tp.active{display:block}
+
+/* CONTENT HEADER */
+.ch{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.tabnav{display:flex;gap:2px;background:var(--bg-surface);padding:3px;border-radius:var(--r);border:1px solid var(--border-sub)}
+.tabbtn{padding:5px 14px;border-radius:4px;font-family:var(--font-head);font-size:11px;font-weight:700;letter-spacing:1.5px;color:var(--t-muted);transition:all .15s}
+.tabbtn:hover{color:var(--t-secondary)}
+.tabbtn.active{background:var(--bg-elevated);color:var(--t-primary)}
+.runinfo{font-family:var(--font-mono);font-size:10px;color:var(--t-dim)}
+.runinfo strong{color:var(--t-muted);font-weight:400}
+
+/* STAT CARDS */
+.sgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+.sc{background:var(--bg-surface);border:1px solid var(--border-sub);border-radius:var(--rl);padding:14px;position:relative;overflow:hidden;transition:border-color .2s}
+.sc::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.sc.el::before{background:var(--green)}
+.sc.pa::before{background:var(--amber)}
+.sc.rv::before{background:var(--blue)}
+.sc.in::before{background:var(--red)}
+.sc:hover{border-color:var(--border-hi)}
+.sc-label{font-family:var(--font-head);font-size:10px;font-weight:700;letter-spacing:2px;color:var(--t-muted);margin-bottom:8px}
+.sc-num{font-family:var(--font-mono);font-size:30px;line-height:1;margin-bottom:5px}
+.sc.el .sc-num{color:var(--green)}
+.sc.pa .sc-num{color:var(--amber)}
+.sc.rv .sc-num{color:var(--blue)}
+.sc.in .sc-num{color:var(--red)}
+.sc-pct{font-family:var(--font-head);font-size:13px;font-weight:600;color:var(--t-secondary);margin-bottom:10px}
+.sc-track{height:3px;background:var(--border-sub);border-radius:2px;overflow:hidden}
+.sc-fill{height:100%;border-radius:2px;transition:width 1.5s cubic-bezier(.4,0,.2,1);width:0}
+.sc.el .sc-fill{background:var(--green)}
+.sc.pa .sc-fill{background:var(--amber)}
+.sc.rv .sc-fill{background:var(--blue)}
+.sc.in .sc-fill{background:var(--red)}
+
+/* RESULTS ROW */
+.rrow{display:grid;grid-template-columns:1fr 218px;gap:12px;margin-bottom:14px}
+.panel{background:var(--bg-surface);border:1px solid var(--border-sub);border-radius:var(--rl);padding:14px}
+.ptitle{font-family:var(--font-head);font-size:10px;font-weight:700;letter-spacing:2.5px;color:var(--t-dim);margin-bottom:14px}
+
+.phrow{display:grid;grid-template-columns:26px 110px 1fr 56px;gap:8px;align-items:center;margin-bottom:9px}
+.phid{font-family:var(--font-mono);font-size:10px;color:var(--t-muted);text-align:center}
+.phname{font-family:var(--font-head);font-size:11px;font-weight:700;letter-spacing:1px;color:var(--t-secondary)}
+.phtrack{height:6px;background:var(--border-sub);border-radius:3px;overflow:hidden}
+.phfill{height:100%;border-radius:3px;width:0;transition:width 1.2s cubic-bezier(.4,0,.2,1)}
+.pf-forest{background:var(--green)}
+.pf-water{background:var(--blue)}
+.pf-roads{background:var(--amber)}
+.pf-rail{background:var(--purple)}
+.pf-settle{background:var(--red)}
+.pf-build{background:var(--orange)}
+.phcount{font-family:var(--font-mono);font-size:10px;color:var(--t-muted);text-align:right}
+
+/* DONUT */
+.donut-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+.donut{position:relative;width:118px;height:118px;border-radius:50%;background:conic-gradient(var(--green) 0% 74.95%,var(--amber) 74.95% 92.36%,var(--blue) 92.36% 97.54%,var(--red) 97.54% 100%);flex-shrink:0}
+.donut-hole{position:absolute;inset:21px;background:var(--bg-surface);border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.dnum{font-family:var(--font-mono);font-size:14px;color:var(--t-bright);line-height:1}
+.dlabel{font-family:var(--font-head);font-size:8px;letter-spacing:1.5px;color:var(--t-dim);margin-top:2px}
+.dleg{width:100%}
+.dlrow{display:flex;align-items:center;gap:6px;padding:3px 0}
+.dldot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.dltext{font-family:var(--font-head);font-size:10px;color:var(--t-secondary);flex:1;letter-spacing:.5px}
+.dlval{font-family:var(--font-mono);font-size:10px;color:var(--t-muted)}
+
+/* LAYERS TABLE */
+.ltable{width:100%;border-collapse:collapse}
+.ltable th{font-family:var(--font-head);font-size:10px;font-weight:700;letter-spacing:1.5px;color:var(--t-dim);text-align:left;padding:6px 10px;border-bottom:1px solid var(--border)}
+.ltable td{padding:7px 10px;border-bottom:1px solid var(--border-sub);vertical-align:middle}
+.ltable tr:last-child td{border-bottom:none}
+.ltable tr:hover td{background:var(--bg-elevated)}
+.lname{font-family:var(--font-mono);font-size:11px;color:var(--t-primary)}
+.lsrc{font-size:11px;color:var(--t-secondary)}
+.lcount{font-family:var(--font-mono);font-size:11px;color:var(--t-muted)}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-family:var(--font-head);font-size:10px;font-weight:600;letter-spacing:.5px}
+.ba{background:var(--green-glow);color:var(--green);border:1px solid rgba(0,212,161,.2)}
+.bw{background:var(--amber-glow);color:var(--amber);border:1px solid rgba(245,166,35,.2)}
+.bd{background:var(--border-sub);color:var(--t-muted);border:1px solid var(--border)}
+
+/* THRESHOLDS */
+.tgroups{display:flex;flex-direction:column;gap:14px}
+.tgroup{background:var(--bg-surface);border:1px solid var(--border-sub);border-radius:var(--rl);padding:16px}
+.ghead{display:flex;align-items:center;gap:10px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border-sub)}
+.gphase{font-family:var(--font-mono);font-size:10px;color:var(--t-dim);border:1px solid var(--border);padding:2px 7px;border-radius:3px}
+.gtitle{font-family:var(--font-head);font-size:13px;font-weight:700;letter-spacing:1.5px;color:var(--t-secondary)}
+.titems{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.tmrow{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px}
+.tlabel{font-family:var(--font-head);font-size:12px;font-weight:600;color:var(--t-primary);letter-spacing:.5px}
+.tunit{font-family:var(--font-mono);font-size:10px;color:var(--t-muted)}
+.tsrow{display:flex;align-items:center;gap:10px}
+.tval{font-family:var(--font-mono);font-size:14px;color:var(--green);min-width:48px;text-align:right;flex-shrink:0}
+.tval.a{color:var(--amber)}
+.thint{font-size:10px;color:var(--t-dim);margin-top:4px}
+input[type=range]{-webkit-appearance:none;appearance:none;flex:1;height:4px;border-radius:2px;outline:none;cursor:pointer;background:linear-gradient(to right,var(--green) 0%,var(--green) var(--fill,0%),var(--border) var(--fill,0%),var(--border) 100%)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--green);border:2px solid var(--bg-elevated);transition:transform .1s}
+input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.25)}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--green);border:2px solid var(--bg-elevated)}
+.apply-bar{position:sticky;bottom:0;background:linear-gradient(to bottom,transparent,var(--bg-void) 30%);padding:24px 0 0;margin-top:16px;display:flex;align-items:center;gap:16px}
+.anote{font-size:11px;color:var(--t-muted);flex:1}
+.anote span{color:var(--amber)}
+.btn-apply{padding:10px 24px;background:var(--green);color:var(--bg-void);border-radius:var(--r);font-family:var(--font-head);font-size:13px;font-weight:700;letter-spacing:1px;transition:all .15s}
+.btn-apply:hover{background:#00ead1}
+.btn-apply:active{transform:scale(.97)}
+
+/* LOG PANEL */
+.log-panel{display:flex;flex-direction:column;background:var(--bg-base);border-left:1px solid var(--border-sub);overflow:hidden}
+.log-hd{display:flex;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border-sub);gap:6px;flex-shrink:0}
+.log-title{font-family:var(--font-head);font-size:10px;font-weight:700;letter-spacing:2.5px;color:var(--t-dim);flex:1}
+.lf{padding:3px 8px;border-radius:3px;font-family:var(--font-head);font-size:10px;font-weight:600;letter-spacing:1px;color:var(--t-muted);border:1px solid transparent;transition:all .15s}
+.lf:hover{color:var(--t-secondary)}
+.lf.active{border-color:var(--border);color:var(--t-secondary)}
+.log-stream{flex:1;overflow-y:auto;padding:6px 0}
+.log-stream::-webkit-scrollbar{width:3px}
+.log-stream::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.le{padding:4px 12px;animation:sil .2s ease}
+.le:hover{background:var(--bg-surface)}
+.lts{font-family:var(--font-mono);font-size:9px;color:var(--t-dim);display:block;margin-bottom:1px}
+.lmsg{font-family:var(--font-mono);font-size:11px;line-height:1.4;word-break:break-word}
+.le.info .lmsg{color:var(--t-secondary)}
+.le.success .lmsg{color:var(--green)}
+.le.warning .lmsg{color:var(--amber)}
+.le.error .lmsg{color:var(--red)}
+@keyframes sil{from{opacity:0;transform:translateX(8px)}to{opacity:1;transform:translateX(0)}}
+</style>
+</head>
+<body>
+<div class="shell">
+
+<!-- HEADER -->
+<header class="header">
+  <div class="brand">
+    <span class="brand-awd">AWD</span>
+    <span class="brand-sub">VALIDATION PIPELINE</span>
+  </div>
+  <div class="hdiv"></div>
+  <div class="meta">
+    <span class="chip run"><em>RUN</em>20260529_090633</span>
+    <span class="chip"><em>LOC</em>MAHARASHTRA · VIDARBHA</span>
+    <span class="chip"><em>STD</em>VCS v5.0 / VM0051</span>
+    <span class="chip"><em>PLOTS</em>30,774</span>
+  </div>
+  <div class="hactions">
+    <div class="spill">
+      <div class="sdot idle" id="sdot"></div>
+      <span id="stxt">IDLE</span>
+    </div>
+    <button class="btn btn-g" onclick="runPipeline('phase2')">▶ PHASE 2</button>
+    <button class="btn btn-p" onclick="runPipeline('full')">▶ FULL RUN</button>
+  </div>
+</header>
+
+<!-- SIDEBAR -->
+<nav class="sidebar">
+  <div class="ss">
+    <span class="slabel">VIEWS</span>
+    <button class="nitem active" data-tab="overview" onclick="switchTab('overview',this)"><div class="nd"></div>OVERVIEW</button>
+    <button class="nitem" data-tab="thresholds" onclick="switchTab('thresholds',this)"><div class="nd"></div>THRESHOLDS</button>
+  </div>
+  <div class="sdiv"></div>
+  <div class="ss">
+    <span class="slabel">PIPELINE</span>
+    <button class="pbtn" onclick="runPipeline('phase1')">▶ RUN PHASE 1<span class="arr">→</span></button>
+    <button class="pbtn" onclick="runPipeline('phase2')">▶ RUN PHASE 2<span class="arr">→</span></button>
+    <button class="pbtn pp" onclick="runPipeline('full')">▶ FULL PIPELINE<span class="arr">→</span></button>
+  </div>
+  <div class="sdiv"></div>
+  <div class="ss">
+    <span class="slabel">CARBON SUMMARY</span>
+    <div class="srow"><span class="sl">Eligible Area</span><span class="sv g">15,041 ha</span></div>
+    <div class="srow"><span class="sl">Adj. Factor (avg)</span><span class="sv">0.9386</span></div>
+    <div class="srow"><span class="sl">For Review</span><span class="sv a">1,595</span></div>
+    <div class="srow"><span class="sl">Phase 1 Valid</span><span class="sv">30,774</span></div>
+    <div class="srow"><span class="sl">Total Input</span><span class="sv">31,479</span></div>
+  </div>
+</nav>
+
+<!-- CONTENT -->
+<main class="content">
+  <div class="ch">
+    <div class="tabnav">
+      <button class="tabbtn active" onclick="switchTab('overview',null,this)">OVERVIEW</button>
+      <button class="tabbtn" onclick="switchTab('thresholds',null,this)">THRESHOLDS</button>
+    </div>
+    <div class="runinfo">Last run <strong>2026-05-29 09:07 UTC</strong> · 66.1s total</div>
+  </div>
+
+  <!-- OVERVIEW -->
+  <div class="tp active" id="tab-overview">
+
+    <!-- Stat cards -->
+    <div class="sgrid">
+      <div class="sc el">
+        <div class="sc-label">FULLY ELIGIBLE</div>
+        <div class="sc-num" id="c0" data-t="23066">0</div>
+        <div class="sc-pct">74.95%</div>
+        <div class="sc-track"><div class="sc-fill" data-w="74.95"></div></div>
+      </div>
+      <div class="sc pa">
+        <div class="sc-label">PARTIALLY ELIGIBLE</div>
+        <div class="sc-num" id="c1" data-t="5358">0</div>
+        <div class="sc-pct">17.41%</div>
+        <div class="sc-track"><div class="sc-fill" data-w="17.41"></div></div>
+      </div>
+      <div class="sc rv">
+        <div class="sc-label">NEEDS REVIEW</div>
+        <div class="sc-num" id="c2" data-t="1595">0</div>
+        <div class="sc-pct">5.18%</div>
+        <div class="sc-track"><div class="sc-fill" data-w="5.18"></div></div>
+      </div>
+      <div class="sc in">
+        <div class="sc-label">INELIGIBLE</div>
+        <div class="sc-num" id="c3" data-t="755">0</div>
+        <div class="sc-pct">2.45%</div>
+        <div class="sc-track"><div class="sc-fill" data-w="2.45"></div></div>
+      </div>
+    </div>
+
+    <!-- Phase results + donut -->
+    <div class="rrow">
+      <div class="panel">
+        <div class="ptitle">NON-ELIGIBLE OVERLAP BY SOURCE</div>
+        <div class="phrow">
+          <span class="phid">2A</span><span class="phname">FOREST</span>
+          <div class="phtrack"><div class="phfill pf-forest" data-w="89"></div></div>
+          <span class="phcount">2,733 plots</span>
+        </div>
+        <div class="phrow">
+          <span class="phid">2B</span><span class="phname">WATER BODIES</span>
+          <div class="phtrack"><div class="phfill pf-water" data-w="3.7"></div></div>
+          <span class="phcount">102 plots</span>
+        </div>
+        <div class="phrow">
+          <span class="phid">2C</span><span class="phname">ROADS</span>
+          <div class="phtrack"><div class="phfill pf-roads" data-w="50.5"></div></div>
+          <span class="phcount">1,618 plots</span>
+        </div>
+        <div class="phrow">
+          <span class="phid">2C</span><span class="phname">RAILWAYS</span>
+          <div class="phtrack"><div class="phfill pf-rail" data-w="1.0"></div></div>
+          <span class="phcount">12 plots</span>
+        </div>
+        <div class="phrow">
+          <span class="phid">2C</span><span class="phname">SETTLEMENTS</span>
+          <div class="phtrack"><div class="phfill pf-settle" data-w="60"></div></div>
+          <span class="phcount">1,843 plots</span>
+        </div>
+        <div class="phrow">
+          <span class="phid">2C</span><span class="phname">BUILDINGS</span>
+          <div class="phtrack"><div class="phfill pf-build" data-w="100"></div></div>
+          <span class="phcount">3,333 plots</span>
+        </div>
+      </div>
+
+      <div class="panel donut-wrap">
+        <div class="ptitle" style="align-self:flex-start">ELIGIBILITY SPLIT</div>
+        <div class="donut">
+          <div class="donut-hole">
+            <span class="dnum">30,774</span>
+            <span class="dlabel">TOTAL</span>
+          </div>
+        </div>
+        <div class="dleg">
+          <div class="dlrow"><div class="dldot" style="background:var(--green)"></div><span class="dltext">ELIGIBLE</span><span class="dlval">74.95%</span></div>
+          <div class="dlrow"><div class="dldot" style="background:var(--amber)"></div><span class="dltext">PARTIAL</span><span class="dlval">17.41%</span></div>
+          <div class="dlrow"><div class="dldot" style="background:var(--blue)"></div><span class="dltext">REVIEW</span><span class="dlval">5.18%</span></div>
+          <div class="dlrow"><div class="dldot" style="background:var(--red)"></div><span class="dltext">INELIGIBLE</span><span class="dlval">2.45%</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Data layers -->
+    <div class="panel">
+      <div class="ptitle">REFERENCE DATA LAYERS — CURRENT STATE</div>
+      <table class="ltable">
+        <thead><tr><th>LAYER FILE</th><th>SOURCE</th><th>STATUS</th><th>FEATURES</th></tr></thead>
+        <tbody>
+          <tr><td><span class="lname">forest_maharashtra_rfa.gpkg</span></td><td><span class="lsrc">Bharatmaps RFA</span></td><td><span class="badge ba">● ACTIVE</span></td><td><span class="lcount">792</span></td></tr>
+          <tr><td><span class="lname">forest_hansen_canopy_2023.gpkg</span></td><td><span class="lsrc">Hansen GFC-2024-v1.12</span></td><td><span class="badge ba">● ACTIVE</span></td><td><span class="lcount">1,221</span></td></tr>
+          <tr><td><span class="lname">water_bodies.gpkg</span></td><td><span class="lsrc">OSM natural=water</span></td><td><span class="badge bw">⚠ INCOMPLETE</span></td><td><span class="lcount">394</span></td></tr>
+          <tr><td><span class="lname">water_jrc_permanent.gpkg</span></td><td><span class="lsrc">JRC GSW occurrence ≥75%</span></td><td><span class="badge ba">● ACTIVE</span></td><td><span class="lcount">0</span></td></tr>
+          <tr><td><span class="lname">roads.gpkg</span></td><td><span class="lsrc">OSM highway (5m buffer)</span></td><td><span class="badge ba">● ACTIVE</span></td><td><span class="lcount">2,829</span></td></tr>
+          <tr><td><span class="lname">railways.gpkg</span></td><td><span class="lsrc">OSM railway (10m buffer)</span></td><td><span class="badge ba">● ACTIVE</span></td><td><span class="lcount">91</span></td></tr>
+          <tr><td><span class="lname">settlements.gpkg</span></td><td><span class="lsrc">OSM place/landuse</span></td><td><span class="badge ba">● ACTIVE</span></td><td><span class="lcount">1,701</span></td></tr>
+          <tr><td><span class="lname">buildings.gpkg</span></td><td><span class="lsrc">Microsoft ML Buildings</span></td><td><span class="badge bd">○ SUPERSEDED</span></td><td><span class="lcount">54,750</span></td></tr>
+          <tr><td><span class="lname">buildings_merged.gpkg</span></td><td><span class="lsrc">Microsoft + Google OB v3</span></td><td><span class="badge ba">● ACTIVE</span></td><td><span class="lcount">486,986</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- THRESHOLDS -->
+  <div class="tp" id="tab-thresholds">
+    <div class="tgroups">
+
+      <div class="tgroup">
+        <div class="ghead"><span class="gphase">PHASE 1</span><span class="gtitle">GEOMETRY & TOPOLOGY</span></div>
+        <div class="titems">
+          <div>
+            <div class="tmrow"><span class="tlabel">Overlap threshold</span><span class="tunit">%</span></div>
+            <div class="tsrow"><input type="range" min="0.001" max="5" step="0.001" value="0.01" class="th-slider" id="s-ov"><span class="tval" id="v-ov">0.010</span></div>
+            <div class="thint">Below this = digitization noise; above = real overlap</div>
+          </div>
+          <div>
+            <div class="tmrow"><span class="tlabel">Duplicate detection radius</span><span class="tunit">m</span></div>
+            <div class="tsrow"><input type="range" min="0.5" max="20" step="0.5" value="2" class="th-slider" id="s-cd"><span class="tval" id="v-cd">2.0</span></div>
+            <div class="thint">Centroid-to-centroid distance for spatial duplicates</div>
+          </div>
+          <div>
+            <div class="tmrow"><span class="tlabel">Sliver artifact threshold</span><span class="tunit">ha</span></div>
+            <div class="tsrow"><input type="range" min="0.0001" max="0.01" step="0.0001" value="0.001" class="th-slider" id="s-sl"><span class="tval" id="v-sl">0.0010</span></div>
+            <div class="thint">Geometry artifacts below this are automatically dropped</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tgroup">
+        <div class="ghead"><span class="gphase">PHASE 2A</span><span class="gtitle">FOREST DEFINITION · MAHARASHTRA FSI</span></div>
+        <div class="titems">
+          <div>
+            <div class="tmrow"><span class="tlabel">Minimum forest polygon area</span><span class="tunit">ha</span></div>
+            <div class="tsrow"><input type="range" min="0.1" max="5" step="0.1" value="1.0" class="th-slider" id="s-fa"><span class="tval" id="v-fa">1.0</span></div>
+            <div class="thint">Maharashtra FSI confirmed: ≥1.0 ha — do not lower</div>
+          </div>
+          <div>
+            <div class="tmrow"><span class="tlabel">Canopy cover threshold</span><span class="tunit">%</span></div>
+            <div class="tsrow"><input type="range" min="5" max="50" step="1" value="10" class="th-slider" id="s-cc"><span class="tval" id="v-cc">10</span></div>
+            <div class="thint">CDM DNA / Maharashtra FSI confirmed: ≥10% canopy</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tgroup">
+        <div class="ghead"><span class="gphase">PHASE 2B</span><span class="gtitle">WATER BODIES</span></div>
+        <div class="titems">
+          <div>
+            <div class="tmrow"><span class="tlabel">Min water body area</span><span class="tunit">ha</span></div>
+            <div class="tsrow"><input type="range" min="0.1" max="2" step="0.1" value="0.5" class="th-slider" id="s-wa"><span class="tval" id="v-wa">0.5</span></div>
+            <div class="thint">Confirm with Jibotosh — unspecified in VM0051 currently</div>
+          </div>
+          <div>
+            <div class="tmrow"><span class="tlabel">JRC occurrence threshold</span><span class="tunit">%</span></div>
+            <div class="tsrow"><input type="range" min="50" max="90" step="5" value="75" class="th-slider" id="s-jrc"><span class="tval" id="v-jrc">75</span></div>
+            <div class="thint">≥75% = permanent water (JRC Global Surface Water v1.4)</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tgroup">
+        <div class="ghead"><span class="gphase">PHASE 2C</span><span class="gtitle">INFRASTRUCTURE BUFFERS</span></div>
+        <div class="titems">
+          <div>
+            <div class="tmrow"><span class="tlabel">Roads buffer</span><span class="tunit">m</span></div>
+            <div class="tsrow"><input type="range" min="1" max="25" step="1" value="5" class="th-slider" id="s-rb"><span class="tval" id="v-rb">5</span></div>
+            <div class="thint">Applied each side of road centreline geometry</div>
+          </div>
+          <div>
+            <div class="tmrow"><span class="tlabel">Railways buffer</span><span class="tunit">m</span></div>
+            <div class="tsrow"><input type="range" min="5" max="50" step="5" value="10" class="th-slider" id="s-rw"><span class="tval" id="v-rw">10</span></div>
+            <div class="thint">Standard railway exclusion zone — each side</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tgroup">
+        <div class="ghead"><span class="gphase">PHASE 2E</span><span class="gtitle">ELIGIBILITY CLASSIFICATION</span></div>
+        <div class="titems">
+          <div>
+            <div class="tmrow"><span class="tlabel">Flag for review if eligible below</span><span class="tunit">%</span></div>
+            <div class="tsrow"><input type="range" min="50" max="95" step="5" value="75" class="th-slider" id="s-rv"><span class="tval" id="v-rv">75</span></div>
+            <div class="thint">Currently flagging 1,595 plots — awaiting Jibotosh decision</div>
+          </div>
+          <div>
+            <div class="tmrow"><span class="tlabel">Min eligible % to retain plot</span><span class="tunit">%</span></div>
+            <div class="tsrow"><input type="range" min="0" max="50" step="5" value="0" class="th-slider" id="s-pt"><span class="tval a" id="v-pt">PENDING</span></div>
+            <div class="thint">⚠ PENDING — awaiting Jibotosh confirmation before enabling</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <div class="apply-bar">
+      <span class="anote">Changes update <span>config/settings.yaml</span> and rerun Phase 2 (~66s)</span>
+      <button class="btn-apply" onclick="applyThresholds()">APPLY & RERUN PHASE 2</button>
+    </div>
+  </div>
+
+</main>
+
+<!-- LOG PANEL -->
+<aside class="log-panel">
+  <div class="log-hd">
+    <span class="log-title">LIVE LOG</span>
+    <button class="lf active" onclick="setLF('all',this)">ALL</button>
+    <button class="lf" onclick="setLF('warning',this)">WARN</button>
+    <button class="lf" onclick="setLF('error',this)">ERR</button>
+  </div>
+  <div class="log-stream" id="ls"></div>
+</aside>
+
+</div>
+
+<script>
+let lf='all';
+
+function fmt(n,t){
+  const v=+n,mn=+t.min,mx=+t.max,st=+t.step;
+  if(st>=1)return v.toFixed(0);
+  if(st>=0.1)return v.toFixed(1);
+  if(st>=0.01)return v.toFixed(2);
+  return v.toFixed(4);
+}
+
+function initSliders(){
+  document.querySelectorAll('.th-slider').forEach(s=>{
+    const id=s.id.replace('s-','v-');
+    const vel=document.getElementById(id);
+    const upd=()=>{
+      const mn=+s.min,mx=+s.max,v=+s.value;
+      const p=((v-mn)/(mx-mn)*100).toFixed(1)+'%';
+      s.style.setProperty('--fill',p);
+      if(vel&&!vel.classList.contains('a')){vel.textContent=fmt(v,s);}
+    };
+    s.addEventListener('input',upd);
+    upd();
+  });
+}
+
+function switchTab(tab,nbtn,tbtn){
+  document.querySelectorAll('.tp').forEach(p=>p.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+  document.querySelectorAll('.nitem[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
+  document.querySelectorAll('.tabbtn').forEach(b=>b.classList.remove('active'));
+  if(tbtn)tbtn.classList.add('active');
+  if(nbtn){
+    document.querySelectorAll('.tabbtn').forEach((b,i)=>{
+      b.classList.toggle('active',['overview','thresholds'][i]===tab);
+    });
+  }
+}
+
+function addLog(lvl,msg){
+  if(lf!=='all'&&lvl!==lf)return;
+  const s=document.getElementById('ls');
+  const now=new Date().toISOString().replace('T',' ').slice(0,19);
+  const d=document.createElement('div');
+  d.className='le '+lvl;d.dataset.lvl=lvl;
+  d.innerHTML=`<span class="lts">${now}</span><span class="lmsg">${msg}</span>`;
+  s.appendChild(d);s.scrollTop=s.scrollHeight;
+}
+
+function setLF(f,btn){
+  lf=f;
+  document.querySelectorAll('.lf').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.le').forEach(e=>{
+    e.style.display=(f==='all'||e.dataset.lvl===f)?'':'none';
+  });
+}
+
+function setStatus(s){
+  const d=document.getElementById('sdot');
+  const t=document.getElementById('stxt');
+  d.className='sdot '+s;t.textContent=s.toUpperCase();
+}
+
+function animateCounter(el,target,dur){
+  const start=performance.now();
+  const go=now=>{
+    const p=Math.min((now-start)/dur,1);
+    const e=1-Math.pow(1-p,3);
+    el.textContent=Math.round(e*target).toLocaleString();
+    if(p<1)requestAnimationFrame(go);
+  };
+  requestAnimationFrame(go);
+}
+
+// ── API CLIENT ───────────────────────────────────────────────────────────────
+
+async function loadResults(){
+  try{
+    const r=await fetch('/api/results/latest');
+    if(!r.ok)return;
+    const d=await r.json();
+    updateDashboard(d);
+  }catch(e){addLog('error','Failed to load results: '+e.message);}
+}
+
+function updateDashboard(d){
+  const s=d.phase2_status_summary||{};
+  const c=d.carbon_summary||{};
+  const order=['FULLY_ELIGIBLE','PARTIALLY_ELIGIBLE','NEEDS_REVIEW','INELIGIBLE'];
+  const numIds=['c0','c1','c2','c3'];
+  const pctSels=['.sc.el .sc-pct','.sc.pa .sc-pct','.sc.rv .sc-pct','.sc.in .sc-pct'];
+  const fillSels=['.sc.el .sc-fill','.sc.pa .sc-fill','.sc.rv .sc-fill','.sc.in .sc-fill'];
+  order.forEach((key,i)=>{
+    const v=s[key]||{};
+    const el=document.getElementById(numIds[i]);
+    if(el)animateCounter(el,v.count||0,1400);
+    const pEl=document.querySelector(pctSels[i]);
+    if(pEl)pEl.textContent=(v.pct||0).toFixed(2)+'%';
+    const fEl=document.querySelector(fillSels[i]);
+    if(fEl)setTimeout(()=>fEl.style.width=(v.pct||0)+'%',150);
+  });
+  // donut legend values
+  const legVals=document.querySelectorAll('.dlval');
+  order.forEach((k,i)=>{if(legVals[i])legVals[i].textContent=((s[k]||{}).pct||0).toFixed(2)+'%';});
+  // donut chart
+  const donut=document.querySelector('.donut');
+  if(donut&&Object.keys(s).length){
+    const el=(s.FULLY_ELIGIBLE||{}).pct||0;
+    const pa=el+((s.PARTIALLY_ELIGIBLE||{}).pct||0);
+    const rv=pa+((s.NEEDS_REVIEW||{}).pct||0);
+    donut.style.background=`conic-gradient(var(--green) 0% ${el}%,var(--amber) ${el}% ${pa}%,var(--blue) ${pa}% ${rv}%,var(--red) ${rv}% 100%)`;
+  }
+  // carbon sidebar
+  if(c.total_eligible_area_ha){
+    const rows=document.querySelectorAll('.srow .sv');
+    if(rows[0])rows[0].textContent=Math.round(c.total_eligible_area_ha).toLocaleString()+' ha';
+    if(rows[1])rows[1].textContent=(c.avg_adjustment_factor||0).toFixed(4);
+    if(rows[2])rows[2].textContent=(c.plots_needing_review||0).toLocaleString();
+  }
+  // run id + timestamp chips
+  if(d.run_id){
+    const chip=document.querySelector('.chip.run');
+    if(chip)chip.innerHTML='<em>RUN</em>'+d.run_id;
+    const ri=document.querySelector('.runinfo');
+    if(ri&&d.timestamp)ri.innerHTML='Last run <strong>'+(d.timestamp||'').replace('T',' ').slice(0,16)+' UTC</strong>';
+  }
+}
+
+async function loadThresholds(){
+  try{
+    const r=await fetch('/api/config/thresholds');
+    if(!r.ok)return;
+    const d=await r.json();
+    const map={
+      's-ov':'overlap_area_pct','s-cd':'centroid_distance_m','s-sl':'sliver_area_ha',
+      's-fa':'cdm_min_area_ha','s-cc':'cdm_canopy_pct','s-wa':'min_area_ha',
+      's-jrc':'jrc_occurrence_threshold','s-rb':'roads_buffer_m','s-rw':'railways_buffer_m',
+      's-rv':'review_threshold_pct','s-pt':'partial_threshold_pct',
+    };
+    Object.entries(map).forEach(([slid,key])=>{
+      const el=document.getElementById(slid);
+      if(!el||d[key]==null)return;
+      el.value=d[key];
+      el.dispatchEvent(new Event('input'));
+    });
+  }catch(e){addLog('error','Failed to load thresholds: '+e.message);}
+}
+
+let _pollTimer=null;
+async function pollStatus(){
+  try{
+    const r=await fetch('/api/status');
+    const d=await r.json();
+    setStatus(d.status||'idle');
+    const btns=document.querySelectorAll('.btn,.pbtn');
+    if(d.status==='running'){
+      btns.forEach(b=>b.disabled=true);
+      _pollTimer=setTimeout(pollStatus,2000);
+    }else{
+      btns.forEach(b=>b.disabled=false);
+    }
+  }catch(e){_pollTimer=setTimeout(pollStatus,5000);}
+}
+
+let _sse=null,_sseRetries=0;
+function connectSSE(){
+  if(_sse){_sse.close();_sse=null;}
+  _sse=new EventSource('/api/logs/stream');
+  _sse.onmessage=(e)=>{
+    const d=JSON.parse(e.data);
+    addLog(d.level||'info',d.msg||'');
+    if(d.done){
+      _sse.close();_sse=null;_sseRetries=0;
+      setStatus('idle');
+      document.querySelectorAll('.btn,.pbtn').forEach(b=>b.disabled=false);
+      loadResults();
+    }
+  };
+  _sse.onerror=()=>{
+    _sse.close();_sse=null;
+    if(_sseRetries<5){_sseRetries++;setTimeout(connectSSE,3000);}
+    else{setStatus('idle');}
+  };
+}
+
+async function runPipeline(phase){
+  if(document.getElementById('sdot').className.includes('running'))return;
+  try{
+    const r=await fetch('/api/run/'+phase,{method:'POST'});
+    if(r.status===409){addLog('warning','Pipeline already running');return;}
+    if(!r.ok){addLog('error','Failed to start pipeline: HTTP '+r.status);return;}
+    const d=await r.json();
+    setStatus('running');
+    addLog('info','Pipeline started: '+phase.toUpperCase()+' · run '+d.run_id);
+    document.querySelectorAll('.btn,.pbtn').forEach(b=>b.disabled=true);
+    _sseRetries=0;
+    connectSSE();
+    if(_pollTimer)clearTimeout(_pollTimer);
+    pollStatus();
+  }catch(e){addLog('error','Pipeline error: '+e.message);}
+}
+
+async function applyThresholds(){
+  const payload={};
+  const keyMap={
+    's-ov':'overlap_area_pct','s-cd':'centroid_distance_m','s-sl':'sliver_area_ha',
+    's-fa':'cdm_min_area_ha','s-cc':'cdm_canopy_pct','s-wa':'min_area_ha',
+    's-jrc':'jrc_occurrence_threshold','s-rb':'roads_buffer_m','s-rw':'railways_buffer_m',
+    's-rv':'review_threshold_pct','s-pt':'partial_threshold_pct',
+  };
+  document.querySelectorAll('.th-slider').forEach(s=>{
+    const key=keyMap[s.id];
+    if(key)payload[key]=parseFloat(s.value);
+  });
+  addLog('info','Updating thresholds...');
+  try{
+    const r=await fetch('/api/config/thresholds',{
+      method:'PATCH',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(payload),
+    });
+    if(!r.ok){addLog('error','Failed to update thresholds: HTTP '+r.status);return;}
+    const d=await r.json();
+    addLog('success','Updated: '+d.updated.join(', '));
+    addLog('info','Triggering Phase 2 rerun...');
+    runPipeline('phase2');
+  }catch(e){addLog('error','Threshold update error: '+e.message);}
+}
+
+// ── INIT ─────────────────────────────────────────────────────────────────────
+
+window.addEventListener('DOMContentLoaded',()=>{
+  setTimeout(()=>{
+    document.querySelectorAll('.sc-fill[data-w]').forEach(e=>e.style.width=e.dataset.w+'%');
+    document.querySelectorAll('.phfill[data-w]').forEach(e=>{
+      e.style.width=Math.min(parseFloat(e.dataset.w),100)+'%';
+    });
+  },150);
+  initSliders();
+  loadResults();
+  loadThresholds();
+  pollStatus();
+});
+</script>
+</body>
+</html>
