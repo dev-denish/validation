@@ -23,6 +23,8 @@ from typing import Tuple
 import geopandas as gpd
 import pandas as pd
 from loguru import logger
+from shapely.ops import unary_union
+from shapely.validation import make_valid
 
 
 class NetAreaCalculator:
@@ -103,56 +105,214 @@ class NetAreaCalculator:
         report["total_plots"] = len(gdf)
         return gdf
 
+    def _load_exclusion_layers(self) -> dict[str, gpd.GeoDataFrame]:
+        """
+        Load all non-eligible reference layers from config, apply buffers.
+        Returns dict of layer-name → GeoDataFrame in WORKING_EPSG.
+        """
+        cfg = self.phase2_cfg
+        layers: dict[str, gpd.GeoDataFrame] = {}
+
+        def _load(path_str: str, buffer_m: float = 0.0, area_filter_ha: float = 0.0):
+            p = Path(path_str) if path_str else None
+            if not p or not p.exists():
+                return None
+            try:
+                gdf_l = gpd.read_file(str(p))
+            except Exception as exc:
+                logger.warning("Could not read {}: {}", p.name, exc)
+                return None
+            if gdf_l.empty:
+                return None
+            if gdf_l.crs and gdf_l.crs.to_epsg() != self.WORKING_EPSG:
+                gdf_l = gdf_l.to_crs(epsg=self.WORKING_EPSG)
+            gdf_l["geometry"] = gdf_l.geometry.apply(
+                lambda g: make_valid(g) if g and not g.is_valid else g
+            )
+            if area_filter_ha > 0:
+                gdf_l = gdf_l[gdf_l.geometry.area / 10_000 >= area_filter_ha]
+            if gdf_l.empty:
+                return None
+            if buffer_m > 0:
+                gdf_l["geometry"] = gdf_l.geometry.buffer(buffer_m)
+            return gdf_l[["geometry"]].copy().reset_index(drop=True)
+
+        # Forest: RFA (Maharashtra-only) + Hansen
+        forest_cfg = cfg.get("forest", {})
+        forest_parts = []
+        rfa_path = forest_cfg.get("layer_path", "")
+        if rfa_path and Path(rfa_path).exists():
+            try:
+                rfa = gpd.read_file(rfa_path)
+                if "st_name" in rfa.columns:
+                    rfa = rfa[rfa["st_name"] == "MAHARASHTRA"].copy()
+                if rfa.crs and rfa.crs.to_epsg() != self.WORKING_EPSG:
+                    rfa = rfa.to_crs(epsg=self.WORKING_EPSG)
+                min_area = forest_cfg.get("cdm_min_area_ha", 1.0)
+                rfa = rfa[rfa.geometry.area / 10_000 >= min_area]
+                if not rfa.empty:
+                    forest_parts.append(rfa[["geometry"]].copy())
+            except Exception as exc:
+                logger.warning("Could not load RFA layer: {}", exc)
+        if forest_cfg.get("hansen_enabled", False):
+            h = _load(forest_cfg.get("hansen_layer_path", ""))
+            if h is not None:
+                forest_parts.append(h)
+        if forest_parts:
+            layers["forest"] = gpd.GeoDataFrame(
+                pd.concat(forest_parts, ignore_index=True),
+                crs=f"EPSG:{self.WORKING_EPSG}",
+            )
+
+        # Water bodies
+        water_cfg = cfg.get("water_bodies", {})
+        if water_cfg.get("enabled", False):
+            w = _load(water_cfg.get("layer_path", ""),
+                      area_filter_ha=water_cfg.get("min_area_ha", 0.5))
+            if w is not None:
+                layers["water"] = w
+
+        # Infrastructure
+        infra_cfg = cfg.get("infrastructure", {})
+        if infra_cfg.get("enabled", False):
+            for key, buf_key, label in [
+                ("roads_layer_path",       "roads_buffer_m",      "roads"),
+                ("railways_layer_path",    "railways_buffer_m",   "railways"),
+                ("settlements_layer_path", "settlements_buffer_m","settlements"),
+                ("buildings_layer_path",   "buildings_buffer_m",  "buildings"),
+            ]:
+                lyr = _load(infra_cfg.get(key, ""),
+                            buffer_m=infra_cfg.get(buf_key, 0))
+                if lyr is not None:
+                    layers[label] = lyr
+
+        logger.info(
+            "  Exclusion layers loaded: {}",
+            ", ".join(f"{k}={len(v):,}" for k, v in layers.items()),
+        )
+        return layers
+
     def _calculate_net_area(
         self, gdf: gpd.GeoDataFrame, report: dict
     ) -> gpd.GeoDataFrame:
         """
-        Sum all non-eligible overlap areas per plot.
-        Only uses columns that actually exist — graceful when phases were SKIPPED.
+        Compute non-eligible area per plot using geometry union (VM0051 correct).
+
+        Summing individual overlap columns double-counts areas where two exclusion
+        categories coincide (e.g. a road running through a forest polygon).
+        The correct approach is: intersect each exclusion layer with the plot,
+        take the unary_union of all resulting intersection geometries, then
+        measure area of the union once.
+
+        Individual source overlap columns are preserved for the breakdown audit
+        trail; total_non_eligible_ha is the union-based correct value.
         """
-        logger.info("Summing non-eligible areas from all Phase 2 checks...")
+        logger.info("Computing non-eligible area via geometry union (VM0051 correct) ...")
+
         gdf = gdf.copy()
-        present_cols = [
-            c for c in self.NON_ELIGIBLE_COLS if c in gdf.columns
-        ]
-        missing_cols = [
-            c for c in self.NON_ELIGIBLE_COLS if c not in gdf.columns
-        ]
-        if missing_cols:
-            logger.warning(
-                f"Missing non-eligible columns (phases SKIPPED): {missing_cols}"
-            )
-            for col in missing_cols:
+        # Ensure all breakdown columns exist (skipped phases leave zeros)
+        for col in self.NON_ELIGIBLE_COLS:
+            if col not in gdf.columns:
                 gdf[col] = 0.0
 
-        gdf["total_non_eligible_ha"] = gdf[self.NON_ELIGIBLE_COLS].sum(axis=1)
-        # Eligible area cannot be negative
-        gdf["eligible_area_ha"] = (
-            gdf["area_ha"] - gdf["total_non_eligible_ha"]
-        ).clip(lower=0.0)
+        # Column-sum baseline (for comparison / audit trail)
+        sum_based = gdf[self.NON_ELIGIBLE_COLS].sum(axis=1)
+
+        # Load all exclusion layers and combine into one GDF
+        excl_layers = self._load_exclusion_layers()
+
+        if not excl_layers:
+            logger.warning(
+                "No exclusion layers loaded from config — "
+                "falling back to column sum (may double-count)."
+            )
+            gdf["total_non_eligible_ha"] = sum_based
+            gdf["eligible_area_ha"] = (gdf["area_ha"] - sum_based).clip(lower=0.0)
+        else:
+            all_excl = gpd.GeoDataFrame(
+                pd.concat(list(excl_layers.values()), ignore_index=True),
+                crs=f"EPSG:{self.WORKING_EPSG}",
+            ).reset_index(drop=True)
+
+            plots_idx = gdf[["plot_id", "area_ha", "geometry"]].reset_index(drop=True)
+
+            # Spatial join: find all (plot, exclusion_feature) candidate pairs
+            joined = gpd.sjoin(
+                plots_idx,
+                all_excl,
+                how="left",
+                predicate="intersects",
+            )
+
+            # Union-based non-eligible area per plot
+            union_ha: dict[str, float] = {}
+            affected = joined.dropna(subset=["index_right"])
+
+            for plot_id, group in affected.groupby("plot_id"):
+                plot_geom = plots_idx.loc[
+                    plots_idx["plot_id"] == plot_id, "geometry"
+                ].values[0]
+                inter_geoms = []
+                for idx in group["index_right"]:
+                    excl_geom = all_excl.loc[int(idx), "geometry"]
+                    try:
+                        inter = plot_geom.intersection(excl_geom)
+                        if not inter.is_empty and inter.area > 0:
+                            inter_geoms.append(inter)
+                    except Exception:
+                        pass
+                if inter_geoms:
+                    union_geom = unary_union(inter_geoms)
+                    union_ha[plot_id] = union_geom.area / 10_000
+
+            gdf["total_non_eligible_ha"] = (
+                gdf["plot_id"].map(union_ha).fillna(0.0)
+            )
+            gdf["eligible_area_ha"] = (
+                gdf["area_ha"] - gdf["total_non_eligible_ha"]
+            ).clip(lower=0.0)
+
+            sum_before = round(float(sum_based.sum()), 4)
+            sum_after  = round(float(gdf["total_non_eligible_ha"].sum()), 4)
+            saved_ha   = round(sum_before - sum_after, 4)
+            logger.info(
+                "  Non-eligible (column sum):  {:>10,.4f} ha",
+                sum_before,
+            )
+            logger.info(
+                "  Non-eligible (union):       {:>10,.4f} ha  (saved {:.4f} ha from double-counting)",
+                sum_after, saved_ha,
+            )
+
+        total_area    = round(float(gdf["area_ha"].sum()), 4)
+        non_elig_ha   = round(float(gdf["total_non_eligible_ha"].sum()), 4)
+        eligible_ha   = round(float(gdf["eligible_area_ha"].sum()), 4)
+        reconciliation = round(total_area - non_elig_ha - eligible_ha, 4)
+
+        logger.info(f"  Total area:        {total_area:,} ha")
+        logger.info(f"  Non-eligible:      {non_elig_ha:,} ha")
+        logger.info(f"  Eligible:          {eligible_ha:,} ha")
+        if abs(reconciliation) > 0.001:
+            logger.warning(
+                "  Reconciliation gap: {:.4f} ha "
+                "(total - non_elig - eligible ≠ 0)",
+                reconciliation,
+            )
 
         area_stats = {
-            "total_plots_area_ha": round(float(gdf["area_ha"].sum()), 4),
-            "total_non_eligible_ha": round(
-                float(gdf["total_non_eligible_ha"].sum()), 4
-            ),
-            "total_eligible_ha": round(
-                float(gdf["eligible_area_ha"].sum()), 4
-            ),
+            "total_plots_area_ha": total_area,
+            "total_non_eligible_ha": non_elig_ha,
+            "total_eligible_ha": eligible_ha,
+            "calculation_method": "union_geometry" if excl_layers else "column_sum_fallback",
             "breakdown": {
                 col: round(float(gdf[col].sum()), 4)
                 for col in self.NON_ELIGIBLE_COLS
             },
+            "note": (
+                "breakdown values are per-source sums; "
+                "total_non_eligible_ha uses spatial union to prevent double-counting"
+            ),
         }
-        logger.info(
-            f"  Total area:        {area_stats['total_plots_area_ha']:,} ha"
-        )
-        logger.info(
-            f"  Non-eligible:      {area_stats['total_non_eligible_ha']:,} ha"
-        )
-        logger.info(
-            f"  Eligible:          {area_stats['total_eligible_ha']:,} ha"
-        )
         report["area_summary"] = area_stats
         return gdf
 
