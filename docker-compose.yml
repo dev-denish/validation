@@ -12,6 +12,7 @@ services:
       - ./notebooks:/app/notebooks
       - ./logs:/app/logs
       - ./tests:/app/tests
+      - ~/.config/earthengine:/root/.config/earthengine:ro
     environment:
       - PYTHONPATH=/app/src
     ports:
