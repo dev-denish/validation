@@ -108,9 +108,16 @@ class Phase2FinalStatusAssigner:
             if factor == 0.0:
                 return self.INELIGIBLE, "Entire plot covered by non-eligible area"
             if needs_review:
+                eligible_pct = row.get("eligible_pct", 100.0) or 0.0
+                loss_pct = 100.0 - eligible_pct
+                # Avoid "Losing 100.0%" for plots that retain a tiny sliver
+                if eligible_pct > 0 and round(loss_pct, 1) >= 100.0:
+                    retained_str = "<0.1% retained"
+                else:
+                    retained_str = f"{eligible_pct:.1f}% retained"
                 return (
                     self.NEEDS_REVIEW,
-                    f"Losing {100 - row.get('eligible_pct', 100):.1f}% of area — manual review required",
+                    f"Losing {loss_pct:.1f}% of area ({retained_str}) — manual review required",
                 )
             if factor < 1.0:
                 non_eligible_ha = row.get("total_non_eligible_ha", 0.0)
@@ -133,20 +140,27 @@ class Phase2FinalStatusAssigner:
         }
 
         # Carbon summary
+        total_eligible = float(gdf["eligible_area_ha"].sum()) if "eligible_area_ha" in gdf.columns else 0.0
+        total_area     = float(gdf["area_ha"].sum()) if "area_ha" in gdf.columns else 0.0
+        plot_mean_adj  = float(gdf["adjustment_factor"].mean()) if "adjustment_factor" in gdf.columns else None
+        area_wtd_adj   = round(total_eligible / total_area, 4) if total_area > 0 else None
+
         report["carbon_summary"] = {
-            "total_eligible_area_ha": round(
-                float(gdf["eligible_area_ha"].sum()), 4
-            ) if "eligible_area_ha" in gdf.columns else None,
-            "avg_adjustment_factor": round(
-                float(gdf["adjustment_factor"].mean()), 4
-            ) if "adjustment_factor" in gdf.columns else None,
+            "total_eligible_area_ha": round(total_eligible, 4),
+            # plot_mean: arithmetic mean across plots (each plot weighted equally)
+            "plot_mean_adj_factor": round(plot_mean_adj, 4) if plot_mean_adj is not None else None,
+            # area_weighted: correct portfolio-level factor = eligible_ha / total_ha
+            # Use this for carbon calculations — required by VM0051 / VCS Standard 5
+            "area_weighted_adj_factor": area_wtd_adj,
+            "avg_adjustment_factor": round(plot_mean_adj, 4) if plot_mean_adj is not None else None,
             "plots_needing_review": int(
                 (gdf["phase2_eligibility"] == self.NEEDS_REVIEW).sum()
             ),
             "note": (
                 "Carbon stock must be calculated using eligible_area_ha × "
                 "baseline_carbon_per_ha. Do NOT use total area when "
-                "adjustment_factor < 1.0 (VCS Standard 5)."
+                "adjustment_factor < 1.0 (VCS Standard 5). "
+                "Use area_weighted_adj_factor for portfolio-level carbon accounting."
             ),
         }
 
@@ -368,15 +382,19 @@ class Phase2FinalStatusAssigner:
         logger.info("-" * 60)
         logger.info("  CARBON ACCOUNTING:")
         logger.info(
-            f"  Total eligible area:   "
+            f"  Total eligible area:       "
             f"{carbon.get('total_eligible_area_ha', 0):>10,.2f} ha"
         )
         logger.info(
-            f"  Avg adjustment factor: "
-            f"{carbon.get('avg_adjustment_factor', 1.0):>10.4f}"
+            f"  Plot-mean adj factor:      "
+            f"{carbon.get('plot_mean_adj_factor', 1.0):>10.4f}  (each plot weighted equally)"
         )
         logger.info(
-            f"  Plots for review:      "
+            f"  Area-weighted adj factor:  "
+            f"{carbon.get('area_weighted_adj_factor', 1.0):>10.4f}  (use for carbon accounting — VM0051)"
+        )
+        logger.info(
+            f"  Plots for review:          "
             f"{carbon.get('plots_needing_review', 0):>10,}"
         )
         logger.info("=" * 60)
