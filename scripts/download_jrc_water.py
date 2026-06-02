@@ -12,6 +12,7 @@ Usage (inside Docker):
 """
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -27,8 +28,9 @@ RAW_DIR = Path("/app/data/raw")
 OUTPUTS_DIR = Path("/app/data/outputs")
 BUFFER_DEG = 0.05
 
-OUTPUT_GPKG = RAW_DIR / "water_jrc_permanent.gpkg"
-OUTPUT_TIF = RAW_DIR / "jrc_occurrence_clipped.tif"
+OUTPUT_GPKG       = RAW_DIR / "water_jrc_permanent.gpkg"
+OUTPUT_TIF        = RAW_DIR / "jrc_occurrence_clipped.tif"
+OUTPUT_STATS_JSON = RAW_DIR / "jrc_occurrence_stats.json"
 
 JRC_TILE_URL = (
     "https://storage.googleapis.com/global-surface-water/downloads2021/occurrence/"
@@ -89,8 +91,12 @@ def download_clip_jrc(w: float, s: float, e: float, n: float) -> bool:
     return True
 
 
-def polygonize_jrc(min_area_ha: float = MIN_AREA_HA) -> gpd.GeoDataFrame:
-    """Extract permanent water polygons from clipped JRC raster."""
+def polygonize_jrc(min_area_ha: float = MIN_AREA_HA) -> tuple[gpd.GeoDataFrame, dict]:
+    """Extract permanent water polygons from clipped JRC raster.
+
+    Returns (GeoDataFrame, stats_dict). The stats dict is also written to
+    OUTPUT_STATS_JSON for use by the Phase 2B checker without re-reading the raster.
+    """
     logger.info("Polygonizing JRC water (occurrence >= {}) ...", OCCURRENCE_THRESHOLD)
 
     with rasterio.open(str(OUTPUT_TIF)) as src:
@@ -99,27 +105,66 @@ def polygonize_jrc(min_area_ha: float = MIN_AREA_HA) -> gpd.GeoDataFrame:
         crs_epsg = src.crs.to_epsg() if src.crs else 4326
         nodata = src.nodata
 
+    # Correct valid_pixels logic: in JRC, pixel value 0 means "never observed as
+    # water" — a valid survey result, NOT a NoData pixel. Only use src.nodata when
+    # the raster explicitly declares a NoData value; otherwise all pixels are valid.
     if nodata is not None:
         valid_pixels = int((arr != nodata).sum())
+        nodata_pixels = int((arr == nodata).sum())
     else:
-        valid_pixels = int((arr > 0).sum())
+        valid_pixels = arr.size   # all pixels are valid survey observations
+        nodata_pixels = 0
+
+    # Compute water stats before the early-return guard so they always go in the sidecar.
+    water_px = int((arr >= OCCURRENCE_THRESHOLD).sum())
+    coverage_pct = round(valid_pixels / arr.size * 100, 2) if arr.size > 0 else 0.0
+
+    if water_px == 0 and coverage_pct == 100.0:
+        result = "CONFIRMED_NO_PERMANENT_WATER"
+    elif water_px == 0:
+        result = "CONFIRMED_NO_PERMANENT_WATER_PARTIAL_COVERAGE"
+    else:
+        result = "WATER_FOUND"
+
+    stats: dict = {
+        "total_pixels": int(arr.size),
+        "nodata_pixels": nodata_pixels,
+        "surveyed_pixels": valid_pixels,
+        "pixels_above_threshold": water_px,
+        "coverage_pct": coverage_pct,
+        "result": result,
+    }
+
+    logger.info(
+        "JRC raster: total={:,} nodata={:,} surveyed={:,} above_{}%={:,} coverage={:.1f}%",
+        arr.size, nodata_pixels, valid_pixels, OCCURRENCE_THRESHOLD, water_px, coverage_pct,
+    )
+
+    # Save sidecar JSON for Phase 2B checker (avoids re-reading the raster at pipeline time).
+    with open(str(OUTPUT_STATS_JSON), "w") as fh:
+        json.dump(stats, fh, indent=2)
+    logger.info("JRC raster stats → {}", OUTPUT_STATS_JSON.name)
 
     if valid_pixels == 0:
+        # Genuinely no survey coverage — tile likely did not clip correctly.
         logger.warning(
-            "JRC tile has no valid pixels within bbox — "
-            "tile may not cover the AWD extent. "
-            "Falling through to OSM-only for uncovered area."
+            "JRC tile has zero surveyed pixels — tile may not cover the AWD extent. "
+            "Falling through to OSM-only."
         )
-        return gpd.GeoDataFrame(geometry=[], crs="EPSG:4326")
+        empty = gpd.GeoDataFrame(geometry=[], crs="EPSG:4326")
+        return empty, stats
 
-    water_px = int((arr >= OCCURRENCE_THRESHOLD).sum())
-    logger.info("  Valid pixels in bbox:              {:>10,}", valid_pixels)
-    logger.info(
-        "  Pixels >= {}% occurrence:         {:>10,}  ({:.2f}%)",
-        OCCURRENCE_THRESHOLD,
-        water_px,
-        water_px / valid_pixels * 100 if valid_pixels else 0,
-    )
+    if water_px == 0:
+        logger.info(
+            "JRC survey complete: 0 of {:,} pixels meet >={}% occurrence threshold. "
+            "Region confirmed as having no JRC-tracked permanent water.",
+            valid_pixels, OCCURRENCE_THRESHOLD,
+        )
+        empty = gpd.GeoDataFrame(geometry=[], crs="EPSG:4326")
+        if OUTPUT_GPKG.exists():
+            OUTPUT_GPKG.unlink()
+        empty.to_file(str(OUTPUT_GPKG), driver="GPKG", layer="water_jrc_permanent")
+        return empty, stats
 
     mask_arr = (arr >= OCCURRENCE_THRESHOLD).astype(np.uint8)
 
@@ -131,7 +176,8 @@ def polygonize_jrc(min_area_ha: float = MIN_AREA_HA) -> gpd.GeoDataFrame:
 
     if not water_shapes:
         logger.warning("No JRC water polygons extracted after threshold filter.")
-        return gpd.GeoDataFrame(geometry=[], crs="EPSG:4326")
+        empty = gpd.GeoDataFrame(geometry=[], crs="EPSG:4326")
+        return empty, stats
 
     geometries = [s for s, _ in water_shapes]
     gdf = gpd.GeoDataFrame({"geometry": geometries}, crs=f"EPSG:{crs_epsg}")
@@ -168,7 +214,7 @@ def polygonize_jrc(min_area_ha: float = MIN_AREA_HA) -> gpd.GeoDataFrame:
             "  Total JRC water area: {:.2f} ha ({:.2f} km²)", total_ha, total_ha / 100
         )
 
-    return gdf
+    return gdf, stats
 
 
 def main() -> None:
@@ -186,13 +232,15 @@ def main() -> None:
         logger.error("JRC raster download failed — aborting.")
         sys.exit(1)
 
-    gdf = polygonize_jrc()
+    gdf, stats = polygonize_jrc()
 
     logger.info("=" * 60)
     logger.info("SUMMARY")
     logger.info("  Clipped raster (audit): {}", OUTPUT_TIF)
     logger.info("  Vector output:          {}", OUTPUT_GPKG)
+    logger.info("  Raster stats JSON:      {}", OUTPUT_STATS_JSON)
     logger.info("  Polygons:               {:,}", len(gdf))
+    logger.info("  JRC result:             {}", stats["result"])
     if len(gdf) > 0:
         gdf_m = gdf.to_crs(epsg=WORKING_EPSG)
         total_ha = gdf_m.geometry.area.sum() / 10_000

@@ -23,6 +23,18 @@ from shapely.ops import unary_union
 from shapely.validation import make_valid
 
 
+def _derive_jrc_status(polygons_count: int, raster_stats: Optional[dict]) -> str:
+    """Map raster stats + polygon count to a human-readable JRC status string."""
+    if raster_stats is None:
+        return "UNKNOWN"
+    result = raster_stats.get("result", "")
+    if "CONFIRMED_NO_PERMANENT_WATER" in result:
+        return "CONFIRMED_NO_WATER"
+    if polygons_count > 0:
+        return "WATER_FOUND"
+    return "UNKNOWN"
+
+
 class WaterBodyChecker:
     """
     Phase 2B — Permanent water body overlap check.
@@ -148,24 +160,54 @@ class WaterBodyChecker:
             return None
         logger.info(f"Loading JRC permanent water layer: {jrc_path.name}")
         jrc_gdf = gpd.read_file(jrc_path)
-        if jrc_gdf.crs.to_epsg() != self.WORKING_EPSG:
+        if len(jrc_gdf) > 0 and jrc_gdf.crs.to_epsg() != self.WORKING_EPSG:
             jrc_gdf = jrc_gdf.to_crs(epsg=self.WORKING_EPSG)
-        invalid = (~jrc_gdf.geometry.is_valid).sum()
-        if invalid > 0:
-            jrc_gdf["geometry"] = jrc_gdf.geometry.apply(make_valid)
-        jrc_gdf["layer_area_ha"] = jrc_gdf.geometry.area / 10_000
-        before = len(jrc_gdf)
-        jrc_gdf = jrc_gdf[jrc_gdf["layer_area_ha"] >= self.min_area_ha].copy()
-        logger.info(
-            f"JRC layer: {len(jrc_gdf):,} polygons "
-            f"(filtered {before - len(jrc_gdf)} below {self.min_area_ha} ha)"
-        )
-        report["jrc_layer"] = {
+        if len(jrc_gdf) > 0:
+            invalid = (~jrc_gdf.geometry.is_valid).sum()
+            if invalid > 0:
+                jrc_gdf["geometry"] = jrc_gdf.geometry.apply(make_valid)
+            jrc_gdf["layer_area_ha"] = jrc_gdf.geometry.area / 10_000
+            before = len(jrc_gdf)
+            jrc_gdf = jrc_gdf[jrc_gdf["layer_area_ha"] >= self.min_area_ha].copy()
+        else:
+            before = 0
+
+        # Load raster stats sidecar written by download_jrc_water.py.
+        stats_path = jrc_path.parent / "jrc_occurrence_stats.json"
+        raster_stats: Optional[dict] = None
+        if stats_path.exists():
+            with open(stats_path) as fh:
+                raster_stats = json.load(fh)
+
+        jrc_status = _derive_jrc_status(len(jrc_gdf), raster_stats)
+
+        if jrc_status == "CONFIRMED_NO_WATER" and raster_stats:
+            logger.info(
+                "JRC water check: CONFIRMED — 0 of {:,} surveyed pixels meet >={}% "
+                "occurrence threshold (region has no JRC-tracked permanent water)",
+                raster_stats["surveyed_pixels"],
+                self.water_cfg.get("jrc_occurrence_threshold", 75),
+            )
+        else:
+            logger.info(
+                f"JRC layer: {len(jrc_gdf):,} polygons "
+                f"(filtered {before - len(jrc_gdf)} below {self.min_area_ha} ha) "
+                f"— status: {jrc_status}"
+            )
+
+        jrc_block: dict = {
             "path": str(jrc_path),
             "polygons_after_filter": len(jrc_gdf),
             "min_area_filter_ha": self.min_area_ha,
             "occurrence_threshold": self.water_cfg.get("jrc_occurrence_threshold", 75),
+            "jrc_status": jrc_status,
+            "raster_stats": raster_stats,
         }
+        if raster_stats is None:
+            jrc_block["raster_stats_warning"] = (
+                f"{stats_path.name} not found — re-run download_jrc_water.py to generate"
+            )
+        report["jrc_layer"] = jrc_block
         return jrc_gdf
 
     def _check_water_overlap(
