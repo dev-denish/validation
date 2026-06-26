@@ -3,228 +3,298 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AWD Validation · Maharashtra</title>
+<title>AWD Validation Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700;800&family=Barlow:wght@300;400;500&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 button{font:inherit;cursor:pointer;border:none;background:none}
 input{font:inherit}
+*{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;-webkit-font-smoothing:antialiased}
 
 :root{
-  --bg-void:#040a14;
-  --bg-base:#070f1e;
-  --bg-surface:#0c1627;
-  --bg-elevated:#111f35;
-  --bg-hover:#162540;
-  --border-sub:#162033;
-  --border:#1c2e48;
-  --border-hi:#27415e;
-  --green:#00d4a1;
-  --green-dim:#008f6d;
-  --green-glow:rgba(0,212,161,.12);
-  --amber:#f5a623;
-  --amber-glow:rgba(245,166,35,.12);
-  --blue:#4e91f0;
-  --blue-glow:rgba(78,145,240,.12);
-  --red:#ff4c5e;
-  --red-glow:rgba(255,76,94,.12);
-  --purple:#a78bfa;
-  --orange:#f97316;
-  --t-bright:#edf2ff;
-  --t-primary:#c5d5ec;
-  --t-secondary:#7a96b5;
-  --t-muted:#3a5070;
-  --t-dim:#1e3050;
-  --font-head:'Barlow Condensed',system-ui,sans-serif;
-  --font-body:'Barlow',system-ui,sans-serif;
-  --font-mono:'Share Tech Mono',monospace;
-  --r:6px;
-  --rl:10px;
+  --bg-page:    #F7F8FA;
+  --bg-card:    #FFFFFF;
+  --border:     #E4E7EC;
+  --border-hi:  #CBD2D9;
+
+  --t-primary:   #111827;
+  --t-secondary: #6B7280;
+  --t-muted:     #9CA3AF;
+  --t-body:      #374151;
+
+  --green:       #2D6A4F;
+  --green-hover: #1B4332;
+  --green-light: #D8F3DC;
+
+  --amber:       #D97706;
+  --amber-bg:    #FEF3C7;
+  --red:         #DC2626;
+  --red-bg:      #FEE2E2;
+  --review:      #6B7280;
+  --review-bg:   #F3F4F6;
+
+  --r:  6px;
+  --rl: 8px;
 }
 
-html,body{height:100%;background:var(--bg-void);color:var(--t-primary);font-family:var(--font-body);font-size:13px;line-height:1.5;overflow:hidden}
+html,body{height:100%;background:var(--bg-page);color:var(--t-primary);font-size:14px;line-height:1.5;overflow:hidden}
 
-/* SHELL */
-.shell{display:grid;grid-template-rows:52px 1fr;grid-template-columns:216px 1fr 264px;height:100vh;overflow:hidden}
+.shell{display:grid;grid-template-rows:56px 1fr;grid-template-columns:220px 1fr 264px;height:100vh;overflow:hidden}
 
-/* HEADER */
-.header{grid-column:1/-1;display:flex;align-items:center;padding:0 18px;background:var(--bg-base);border-bottom:1px solid var(--border-sub);gap:20px}
+/* ── HEADER ── */
+.header{grid-column:1/-1;display:flex;align-items:center;padding:0 24px;background:#FFFFFF;border-bottom:1px solid var(--border);gap:20px}
 .brand{display:flex;align-items:baseline;gap:10px;flex-shrink:0}
-.brand-awd{font-family:var(--font-head);font-size:24px;font-weight:800;color:var(--green);letter-spacing:3px}
-.brand-sub{font-family:var(--font-head);font-size:11px;font-weight:600;letter-spacing:3.5px;color:var(--t-dim)}
+.brand-awd{font-size:16px;font-weight:700;color:var(--green);letter-spacing:0.02em}
+.brand-sub{font-size:11px;font-weight:500;letter-spacing:0.06em;color:var(--t-muted);text-transform:uppercase}
 .hdiv{width:1px;height:28px;background:var(--border);flex-shrink:0}
-.meta{display:flex;align-items:center;gap:14px;flex:1;min-width:0}
-.chip{font-family:var(--font-mono);font-size:10.5px;color:var(--t-secondary);letter-spacing:.5px;white-space:nowrap}
-.chip em{color:var(--t-dim);font-style:normal;margin-right:4px}
-.chip.run{color:var(--green-dim)}
+.meta{display:flex;align-items:center;gap:20px;flex:1;min-width:0}
+.chip{display:flex;flex-direction:column;white-space:nowrap}
+.chip em{font-style:normal;font-size:10px;font-weight:600;color:var(--t-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:1px}
+.chip span,.chip>*:not(em){font-size:13px;font-weight:600;color:var(--t-primary)}
 .hactions{display:flex;align-items:center;gap:8px;flex-shrink:0}
-.spill{display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:20px;border:1px solid var(--border);font-family:var(--font-head);font-size:10px;font-weight:700;letter-spacing:2px;color:var(--t-secondary)}
-.sdot{width:7px;height:7px;border-radius:50%;background:var(--t-muted)}
-.sdot.idle{background:var(--green);animation:pg 2s ease-in-out infinite}
-.sdot.running{background:var(--amber);animation:pa 1s ease-in-out infinite}
+.spill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;background:var(--green-light);font-size:12px;font-weight:600;color:var(--green)}
+.sdot{width:7px;height:7px;border-radius:50%;flex-shrink:0;background:var(--green)}
+.sdot.idle{background:var(--green)}
+.sdot.running{background:var(--amber)}
 .sdot.error{background:var(--red)}
-@keyframes pg{0%,100%{box-shadow:0 0 0 0 rgba(0,212,161,.5)}50%{box-shadow:0 0 0 5px rgba(0,212,161,0)}}
-@keyframes pa{0%,100%{box-shadow:0 0 0 0 rgba(245,166,35,.5)}50%{box-shadow:0 0 0 5px rgba(245,166,35,0)}}
-.btn{padding:7px 14px;border-radius:var(--r);font-family:var(--font-head);font-size:12px;font-weight:700;letter-spacing:1px;transition:all .15s}
-.btn-g{border:1px solid var(--border-hi);color:var(--t-secondary)}
-.btn-g:hover{border-color:var(--green-dim);color:var(--green);background:var(--green-glow)}
-.btn-p{background:var(--green);color:var(--bg-void)}
-.btn-p:hover{background:#00ead1}
-.btn-p:active{transform:scale(.97)}
+.btn{padding:8px 16px;border-radius:var(--r);font-size:13px;font-weight:600;transition:background .15s,color .15s,border-color .15s}
+.btn-g{background:#FFFFFF;color:var(--green);border:1.5px solid var(--green)}
+.btn-g:hover{background:var(--green-light)}
+.btn-p{background:var(--green);color:#FFFFFF}
+.btn-p:hover{background:var(--green-hover)}
 
-/* SIDEBAR */
-.sidebar{display:flex;flex-direction:column;background:var(--bg-base);border-right:1px solid var(--border-sub);overflow-y:auto;padding:14px 0}
+/* ── SIDEBAR ── */
+.sidebar{display:flex;flex-direction:column;background:#FFFFFF;border-right:1px solid var(--border);overflow-y:auto;padding:24px 16px}
 .sidebar::-webkit-scrollbar{width:3px}
 .sidebar::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
-.ss{padding:0 10px 18px}
-.slabel{font-family:var(--font-head);font-size:10px;font-weight:700;letter-spacing:2.5px;color:var(--t-dim);padding:0 8px 8px;display:block}
-.nitem{display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;border-radius:var(--r);font-family:var(--font-head);font-size:12.5px;font-weight:600;letter-spacing:.5px;color:var(--t-muted);transition:all .15s;border:1px solid transparent}
-.nitem:hover{background:var(--bg-elevated);color:var(--t-secondary)}
-.nitem.active{background:var(--green-glow);color:var(--green);border-color:rgba(0,212,161,.2)}
-.nitem .nd{width:5px;height:5px;border-radius:50%;background:var(--t-dim);flex-shrink:0}
-.nitem.active .nd{background:var(--green)}
-.sdiv{height:1px;background:var(--border-sub);margin:2px 10px 18px}
-.pbtn{width:100%;padding:9px 10px;border-radius:var(--r);border:1px solid var(--border);font-family:var(--font-head);font-size:12px;font-weight:700;letter-spacing:1px;color:var(--t-secondary);text-align:left;display:flex;align-items:center;gap:8px;margin-bottom:5px;transition:all .15s}
-.pbtn:hover{border-color:var(--border-hi);color:var(--t-primary);background:var(--bg-elevated)}
-.pbtn.pp{border-color:var(--green-dim);color:var(--green)}
-.pbtn.pp:hover{background:var(--green-glow)}
-.pbtn .arr{margin-left:auto;opacity:.4}
-.srow{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border-sub)}
+.ss{padding-bottom:8px}
+.slabel{font-size:12px;font-weight:600;letter-spacing:0.08em;color:var(--t-muted);text-transform:uppercase;display:block;padding:0 4px 8px;margin-top:24px}
+.ss:first-child .slabel{margin-top:0}
+.nitem{display:flex;align-items:center;gap:8px;width:100%;padding:8px 12px;border-radius:var(--r);font-size:14px;font-weight:500;color:var(--t-body);transition:background .15s,color .15s;text-align:left}
+.nitem:hover{background:var(--bg-page)}
+.nitem.active{background:var(--green-light);color:var(--green);font-weight:600}
+.nitem .nd{display:none}
+.sdiv{height:1px;background:var(--border);margin:8px 0}
+.pbtn{width:100%;padding:8px 12px;border-radius:var(--r);border:1px solid var(--border);font-size:13px;font-weight:500;color:var(--t-body);text-align:left;display:flex;align-items:center;gap:8px;margin-bottom:4px;transition:background .15s,border-color .15s}
+.pbtn:hover{background:var(--bg-page);border-color:var(--border-hi)}
+.pbtn.pp{background:var(--green);color:#FFFFFF;border-color:var(--green)}
+.pbtn.pp:hover{background:var(--green-hover);border-color:var(--green-hover)}
+.pbtn .arr{margin-left:auto;color:var(--t-muted)}
+.pbtn.pp .arr{color:rgba(255,255,255,.7)}
+.srow{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)}
 .srow:last-child{border-bottom:none}
-.sl{font-size:11px;color:var(--t-muted)}
-.sv{font-family:var(--font-mono);font-size:11.5px;color:var(--t-primary)}
-.sv.g{color:var(--green)}
-.sv.a{color:var(--amber)}
+.sl{font-size:13px;color:var(--t-secondary)}
+.sv{font-size:13px;font-weight:600;color:var(--t-primary)}
+.sv.g{color:var(--green);font-weight:700}
+.sv.a{color:var(--amber);font-weight:600}
 
-/* CONTENT */
-.content{overflow-y:auto;background:var(--bg-void);padding:18px 18px 32px}
+/* ── CONTENT ── */
+.content{overflow-y:auto;background:var(--bg-page);padding:24px}
 .content::-webkit-scrollbar{width:4px}
 .content::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 .tp{display:none}
 .tp.active{display:block}
+.tp.map-panel{display:none;padding:0}
+.tp.map-panel.active{display:flex;flex-direction:column;flex:1;min-height:0}
 
-/* CONTENT HEADER */
-.ch{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
-.tabnav{display:flex;gap:2px;background:var(--bg-surface);padding:3px;border-radius:var(--r);border:1px solid var(--border-sub)}
-.tabbtn{padding:5px 14px;border-radius:4px;font-family:var(--font-head);font-size:11px;font-weight:700;letter-spacing:1.5px;color:var(--t-muted);transition:all .15s}
-.tabbtn:hover{color:var(--t-secondary)}
-.tabbtn.active{background:var(--bg-elevated);color:var(--t-primary)}
-.runinfo{font-family:var(--font-mono);font-size:10px;color:var(--t-dim)}
-.runinfo strong{color:var(--t-muted);font-weight:400}
+/* ── CONTENT HEADER ── */
+.ch{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.tabnav{display:flex;gap:2px;background:var(--bg-page);padding:3px;border-radius:var(--r);border:1px solid var(--border)}
+.tabbtn{padding:6px 16px;border-radius:4px;font-size:13px;font-weight:500;color:var(--t-secondary);transition:background .15s,color .15s}
+.tabbtn:hover{color:var(--t-primary)}
+.tabbtn.active{background:#FFFFFF;color:var(--t-primary);font-weight:600}
+.runinfo{font-size:12px;color:var(--t-secondary)}
+.runinfo strong{color:var(--t-primary);font-weight:600}
 
-/* STAT CARDS */
-.sgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
-.sc{background:var(--bg-surface);border:1px solid var(--border-sub);border-radius:var(--rl);padding:14px;position:relative;overflow:hidden;transition:border-color .2s}
-.sc::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+/* ── STAT CARDS ── */
+.sgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.sc{background:#FFFFFF;border:1px solid var(--border);border-radius:var(--rl);padding:16px 20px;position:relative;overflow:hidden}
+.sc::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
 .sc.el::before{background:var(--green)}
 .sc.pa::before{background:var(--amber)}
-.sc.rv::before{background:var(--blue)}
+.sc.rv::before{background:var(--review)}
 .sc.in::before{background:var(--red)}
-.sc:hover{border-color:var(--border-hi)}
-.sc-label{font-family:var(--font-head);font-size:10px;font-weight:700;letter-spacing:2px;color:var(--t-muted);margin-bottom:8px}
-.sc-num{font-family:var(--font-mono);font-size:30px;line-height:1;margin-bottom:5px}
-.sc.el .sc-num{color:var(--green)}
-.sc.pa .sc-num{color:var(--amber)}
-.sc.rv .sc-num{color:var(--blue)}
-.sc.in .sc-num{color:var(--red)}
-.sc-pct{font-family:var(--font-head);font-size:13px;font-weight:600;color:var(--t-secondary);margin-bottom:10px}
-.sc-track{height:3px;background:var(--border-sub);border-radius:2px;overflow:hidden}
+.sc-label{font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--t-muted);margin-bottom:10px}
+.sc-num{font-size:28px;font-weight:700;line-height:1;margin-bottom:6px;color:var(--t-primary)}
+.sc-pct{font-size:13px;font-weight:500;color:var(--t-secondary);margin-bottom:12px}
+.sc-track{height:3px;background:var(--border);border-radius:2px;overflow:hidden}
 .sc-fill{height:100%;border-radius:2px;transition:width 1.5s cubic-bezier(.4,0,.2,1);width:0}
 .sc.el .sc-fill{background:var(--green)}
 .sc.pa .sc-fill{background:var(--amber)}
-.sc.rv .sc-fill{background:var(--blue)}
+.sc.rv .sc-fill{background:var(--review)}
 .sc.in .sc-fill{background:var(--red)}
 
-/* RESULTS ROW */
-.rrow{display:grid;grid-template-columns:1fr 218px;gap:12px;margin-bottom:14px}
-.panel{background:var(--bg-surface);border:1px solid var(--border-sub);border-radius:var(--rl);padding:14px}
-.ptitle{font-family:var(--font-head);font-size:10px;font-weight:700;letter-spacing:2.5px;color:var(--t-dim);margin-bottom:14px}
-
-.phrow{display:grid;grid-template-columns:26px 110px 1fr 56px;gap:8px;align-items:center;margin-bottom:9px}
-.phid{font-family:var(--font-mono);font-size:10px;color:var(--t-muted);text-align:center}
-.phname{font-family:var(--font-head);font-size:11px;font-weight:700;letter-spacing:1px;color:var(--t-secondary)}
-.phtrack{height:6px;background:var(--border-sub);border-radius:3px;overflow:hidden}
+/* ── RESULTS ROW ── */
+.rrow{display:grid;grid-template-columns:1fr 218px;gap:12px;margin-bottom:16px}
+.panel{background:#FFFFFF;border:1px solid var(--border);border-radius:var(--rl);padding:20px 24px}
+.ptitle{font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--t-muted);margin-bottom:16px}
+.phrow{display:grid;grid-template-columns:32px 120px 1fr 72px;gap:8px;align-items:center;margin-bottom:10px}
+.phid{font-size:11px;font-weight:600;color:var(--t-secondary);background:#F3F4F6;padding:2px 6px;border-radius:4px;text-align:center}
+.phname{font-size:13px;font-weight:500;color:var(--t-body)}
+.phtrack{height:5px;background:var(--border);border-radius:3px;overflow:hidden}
 .phfill{height:100%;border-radius:3px;width:0;transition:width 1.2s cubic-bezier(.4,0,.2,1)}
 .pf-forest{background:var(--green)}
-.pf-water{background:var(--blue)}
+.pf-water{background:#3B82F6}
 .pf-roads{background:var(--amber)}
-.pf-rail{background:var(--purple)}
+.pf-rail{background:#8B5CF6}
 .pf-settle{background:var(--red)}
-.pf-build{background:var(--orange)}
-.phcount{font-family:var(--font-mono);font-size:10px;color:var(--t-muted);text-align:right}
+.pf-build{background:#F97316}
+.phcount{font-size:12px;font-weight:500;color:var(--t-secondary);text-align:right}
 
-/* DONUT */
-.donut-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
-.donut{position:relative;width:118px;height:118px;border-radius:50%;background:conic-gradient(var(--green) 0% 74.95%,var(--amber) 74.95% 92.36%,var(--blue) 92.36% 97.54%,var(--red) 97.54% 100%);flex-shrink:0}
-.donut-hole{position:absolute;inset:21px;background:var(--bg-surface);border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center}
-.dnum{font-family:var(--font-mono);font-size:14px;color:var(--t-bright);line-height:1}
-.dlabel{font-family:var(--font-head);font-size:8px;letter-spacing:1.5px;color:var(--t-dim);margin-top:2px}
+/* ── DONUT ── */
+.donut-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px}
+.donut{position:relative;width:118px;height:118px;border-radius:50%;background:conic-gradient(#2D6A4F 0% 74.95%,#D97706 74.95% 92.36%,#6B7280 92.36% 97.54%,#DC2626 97.54% 100%);flex-shrink:0}
+.donut-hole{position:absolute;inset:21px;background:#FFFFFF;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.dnum{font-size:14px;font-weight:700;color:var(--t-primary);line-height:1}
+.dlabel{font-size:9px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--t-muted);margin-top:3px}
 .dleg{width:100%}
-.dlrow{display:flex;align-items:center;gap:6px;padding:3px 0}
-.dldot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
-.dltext{font-family:var(--font-head);font-size:10px;color:var(--t-secondary);flex:1;letter-spacing:.5px}
-.dlval{font-family:var(--font-mono);font-size:10px;color:var(--t-muted)}
+.dlrow{display:flex;align-items:center;gap:8px;padding:4px 0}
+.dldot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.dltext{font-size:12px;font-weight:500;color:var(--t-secondary);flex:1}
+.dlval{font-size:12px;font-weight:600;color:var(--t-primary)}
 
-/* LAYERS TABLE */
+/* ── LAYERS TABLE ── */
 .ltable{width:100%;border-collapse:collapse}
-.ltable th{font-family:var(--font-head);font-size:10px;font-weight:700;letter-spacing:1.5px;color:var(--t-dim);text-align:left;padding:6px 10px;border-bottom:1px solid var(--border)}
-.ltable td{padding:7px 10px;border-bottom:1px solid var(--border-sub);vertical-align:middle}
+.ltable th{font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--t-muted);text-align:left;padding:6px 12px;border-bottom:1px solid var(--border)}
+.ltable td{padding:8px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
 .ltable tr:last-child td{border-bottom:none}
-.ltable tr:hover td{background:var(--bg-elevated)}
-.lname{font-family:var(--font-mono);font-size:11px;color:var(--t-primary)}
-.lsrc{font-size:11px;color:var(--t-secondary)}
-.lcount{font-family:var(--font-mono);font-size:11px;color:var(--t-muted)}
-.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-family:var(--font-head);font-size:10px;font-weight:600;letter-spacing:.5px}
-.ba{background:var(--green-glow);color:var(--green);border:1px solid rgba(0,212,161,.2)}
-.bw{background:var(--amber-glow);color:var(--amber);border:1px solid rgba(245,166,35,.2)}
-.bd{background:var(--border-sub);color:var(--t-muted);border:1px solid var(--border)}
+.ltable tr:hover td{background:var(--bg-page)}
+.lname{font-size:13px;font-weight:500;color:var(--t-primary)}
+.lsrc{font-size:13px;color:var(--t-secondary)}
+.lcount{font-size:13px;font-weight:600;color:var(--t-primary)}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600}
+.ba{background:var(--green-light);color:var(--green)}
+.bw{background:var(--amber-bg);color:var(--amber)}
+.br{background:#DBEAFE;color:#1D4ED8}
+.bd{background:#F3F4F6;color:var(--t-secondary)}
 
-/* THRESHOLDS */
-.tgroups{display:flex;flex-direction:column;gap:14px}
-.tgroup{background:var(--bg-surface);border:1px solid var(--border-sub);border-radius:var(--rl);padding:16px}
-.ghead{display:flex;align-items:center;gap:10px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border-sub)}
-.gphase{font-family:var(--font-mono);font-size:10px;color:var(--t-dim);border:1px solid var(--border);padding:2px 7px;border-radius:3px}
-.gtitle{font-family:var(--font-head);font-size:13px;font-weight:700;letter-spacing:1.5px;color:var(--t-secondary)}
-.titems{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.tmrow{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px}
-.tlabel{font-family:var(--font-head);font-size:12px;font-weight:600;color:var(--t-primary);letter-spacing:.5px}
-.tunit{font-family:var(--font-mono);font-size:10px;color:var(--t-muted)}
+/* ── THRESHOLDS ── */
+.tgroups{display:flex;flex-direction:column;gap:16px}
+.tgroup{background:#FFFFFF;border:1px solid var(--border);border-radius:var(--rl);padding:20px 24px}
+.ghead{display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--border)}
+.gphase{font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--t-secondary);background:#F3F4F6;padding:3px 8px;border-radius:4px}
+.gtitle{font-size:14px;font-weight:600;color:var(--t-primary)}
+.titems{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.tmrow{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.tlabel{font-size:13px;font-weight:500;color:var(--t-body)}
+.tunit{font-size:12px;color:var(--t-muted);font-weight:500}
 .tsrow{display:flex;align-items:center;gap:10px}
-.tval{font-family:var(--font-mono);font-size:14px;color:var(--green);min-width:48px;text-align:right;flex-shrink:0}
+.tval{background:var(--bg-page);border:1px solid var(--border);color:var(--t-primary);font-size:13px;font-weight:600;padding:4px 10px;border-radius:4px;min-width:56px;text-align:center;flex-shrink:0}
 .tval.a{color:var(--amber)}
-.thint{font-size:10px;color:var(--t-dim);margin-top:4px}
+.thint{font-size:12px;color:var(--t-muted);margin-top:6px}
 input[type=range]{-webkit-appearance:none;appearance:none;flex:1;height:4px;border-radius:2px;outline:none;cursor:pointer;background:linear-gradient(to right,var(--green) 0%,var(--green) var(--fill,0%),var(--border) var(--fill,0%),var(--border) 100%)}
-input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--green);border:2px solid var(--bg-elevated);transition:transform .1s}
-input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.25)}
-input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--green);border:2px solid var(--bg-elevated)}
-.apply-bar{position:sticky;bottom:0;background:linear-gradient(to bottom,transparent,var(--bg-void) 30%);padding:24px 0 0;margin-top:16px;display:flex;align-items:center;gap:16px}
-.anote{font-size:11px;color:var(--t-muted);flex:1}
-.anote span{color:var(--amber)}
-.btn-apply{padding:10px 24px;background:var(--green);color:var(--bg-void);border-radius:var(--r);font-family:var(--font-head);font-size:13px;font-weight:700;letter-spacing:1px;transition:all .15s}
-.btn-apply:hover{background:#00ead1}
-.btn-apply:active{transform:scale(.97)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--green);border:2px solid #FFFFFF;box-shadow:0 1px 3px rgba(0,0,0,.15);transition:transform .1s}
+input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.2)}
+input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--green);border:2px solid #FFFFFF}
+.apply-bar{position:sticky;bottom:0;background:linear-gradient(to bottom,transparent,var(--bg-page) 40%);padding:24px 0 0;margin-top:16px;display:flex;align-items:center;gap:16px}
+.anote{font-size:13px;color:var(--t-secondary);flex:1}
+.anote span{color:var(--amber);font-weight:500}
+.btn-apply{padding:10px 24px;background:var(--green);color:#FFFFFF;border-radius:var(--r);font-size:13px;font-weight:600;transition:background .15s}
+.btn-apply:hover{background:var(--green-hover)}
 
-/* LOG PANEL */
-.log-panel{display:flex;flex-direction:column;background:var(--bg-base);border-left:1px solid var(--border-sub);overflow:hidden}
-.log-hd{display:flex;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border-sub);gap:6px;flex-shrink:0}
-.log-title{font-family:var(--font-head);font-size:10px;font-weight:700;letter-spacing:2.5px;color:var(--t-dim);flex:1}
-.lf{padding:3px 8px;border-radius:3px;font-family:var(--font-head);font-size:10px;font-weight:600;letter-spacing:1px;color:var(--t-muted);border:1px solid transparent;transition:all .15s}
+/* ── LOG PANEL ── */
+.log-panel{display:flex;flex-direction:column;background:#FFFFFF;border-left:1px solid var(--border);overflow:hidden}
+.log-hd{display:flex;align-items:center;padding:12px 14px;border-bottom:1px solid var(--border);gap:6px;flex-shrink:0}
+.log-title{font-size:13px;font-weight:600;color:var(--t-primary);flex:1}
+.lf{padding:4px 8px;font-size:11px;font-weight:600;color:var(--t-muted);border-bottom:2px solid transparent;transition:color .15s,border-color .15s;border-radius:0}
 .lf:hover{color:var(--t-secondary)}
-.lf.active{border-color:var(--border);color:var(--t-secondary)}
-.log-stream{flex:1;overflow-y:auto;padding:6px 0}
+.lf.active{color:var(--green);border-bottom-color:var(--green)}
+.log-stream{flex:1;overflow-y:auto;padding:4px 0}
 .log-stream::-webkit-scrollbar{width:3px}
 .log-stream::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
-.le{padding:4px 12px;animation:sil .2s ease}
-.le:hover{background:var(--bg-surface)}
-.lts{font-family:var(--font-mono);font-size:9px;color:var(--t-dim);display:block;margin-bottom:1px}
-.lmsg{font-family:var(--font-mono);font-size:11px;line-height:1.4;word-break:break-word}
-.le.info .lmsg{color:var(--t-secondary)}
+.le{padding:5px 14px}
+.le:hover{background:var(--bg-page)}
+.lts{font-size:10px;color:var(--t-muted);font-family:monospace;display:block;margin-bottom:1px}
+.lmsg{font-size:12px;font-family:monospace;line-height:1.4;word-break:break-word}
+.le.info .lmsg{color:var(--t-body)}
 .le.success .lmsg{color:var(--green)}
 .le.warning .lmsg{color:var(--amber)}
 .le.error .lmsg{color:var(--red)}
-@keyframes sil{from{opacity:0;transform:translateX(8px)}to{opacity:1;transform:translateX(0)}}
+
+/* ── MAP TAB ── */
+#map-container{flex:1;position:relative;background:#E4E7EC}
+#map{width:100%;height:100%}
+#map-count-badge{
+  position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:1000;
+  background:rgba(255,255,255,.95);border:1px solid var(--border);
+  border-radius:20px;padding:6px 16px;
+  font-size:12px;color:var(--t-secondary);
+  pointer-events:none;
+}
+#map-count-badge span{color:var(--green);font-weight:700}
+#map-loading{
+  position:absolute;inset:0;z-index:2000;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(247,248,250,.9);
+  font-size:14px;font-weight:600;color:var(--t-primary);
+}
+/* Leaflet overrides */
+.leaflet-popup-content-wrapper{background:#FFFFFF;border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.1)}
+.leaflet-popup-tip{background:#FFFFFF}
+.leaflet-popup-content{margin:14px 16px;font-size:13px;color:var(--t-body)}
+.leaflet-popup-close-button{color:var(--t-muted)!important}
+.pop-row{display:flex;gap:8px;margin-bottom:6px;align-items:baseline}
+.pop-lbl{font-size:11px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:var(--t-muted);min-width:80px;flex-shrink:0}
+.pop-val{font-size:13px;color:var(--t-body);word-break:break-all}
+.pop-status{padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600}
+.pop-status.ELIGIBLE{background:var(--green-light);color:var(--green)}
+.pop-status.PARTIALLY_ELIGIBLE{background:var(--amber-bg);color:var(--amber)}
+.pop-status.NEEDS_REVIEW{background:var(--review-bg);color:var(--review)}
+.pop-status.INELIGIBLE{background:var(--red-bg);color:var(--red)}
+.pop-actions{display:flex;gap:6px;margin-top:12px;flex-wrap:wrap}
+.pop-btn{padding:5px 12px;border-radius:4px;font-size:12px;font-weight:600;border:1px solid var(--border);color:var(--t-secondary);cursor:pointer;transition:all .15s}
+.pop-btn:hover{border-color:var(--border-hi);color:var(--t-primary);background:var(--bg-page)}
+.pop-btn.zoom-btn{border-color:var(--green);color:var(--green)}
+.pop-btn.zoom-btn:hover{background:var(--green-light)}
+/* Map legend */
+.map-legend{
+  position:absolute;bottom:30px;right:10px;z-index:1000;
+  background:#FFFFFF;border:1px solid var(--border);
+  border-radius:8px;padding:16px;min-width:230px;
+}
+.leg-title{font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--t-muted);margin-bottom:12px}
+.leg-row{display:flex;align-items:center;gap:8px;padding:4px 0}
+.leg-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.leg-name{font-size:13px;font-weight:500;color:var(--t-body);flex:1}
+.leg-count{font-size:13px;font-weight:600;color:var(--t-primary);text-align:right}
+.leg-pct{font-size:12px;color:var(--t-muted);text-align:right;min-width:40px}
+.leg-div{height:1px;background:var(--border);margin:8px 0}
+.leg-total{font-size:13px;font-weight:600;color:var(--t-primary)}
+.leg-area{font-size:12px;color:var(--t-secondary);margin-top:4px}
+.leg-area-val{font-weight:700;color:var(--green)}
+
+/* ── DOWNLOAD DROPDOWN ── */
+.dropdown{position:relative;display:inline-block}
+.dropdown-menu{position:absolute;top:calc(100% + 6px);right:0;z-index:3000;min-width:300px;max-height:80vh;overflow-y:auto;background:#FFFFFF;border:1px solid var(--border);border-radius:var(--rl);box-shadow:0 8px 24px rgba(0,0,0,.12);padding:6px;display:none}
+.dropdown-menu.open{display:block}
+.dd-item{display:flex;align-items:flex-start;gap:10px;width:100%;padding:9px 12px;border-radius:var(--r);text-align:left;transition:background .12s}
+.dd-item:hover{background:var(--bg-page)}
+.dd-ic{font-size:14px;line-height:1.5;flex-shrink:0}
+.dd-tx{display:flex;flex-direction:column;min-width:0}
+.dd-tx strong{font-size:13px;font-weight:600;color:var(--t-primary)}
+.dd-tx em{font-style:normal;font-size:11px;color:var(--t-muted);margin-top:1px}
+.dd-sep{padding:6px 12px 3px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--t-muted);border-top:1px solid var(--border);margin-top:4px}
+.dd-sep:first-child{border-top:none;margin-top:0}
+
+/* ── KML UPLOAD BADGE ── */
+.kml-badge{display:none;align-items:center;gap:6px;padding:4px 6px 4px 12px;border-radius:20px;background:#DBEAFE;color:#1D4ED8;font-size:12px;font-weight:600;white-space:nowrap}
+.kml-badge.show{display:inline-flex}
+.kml-badge button{color:#1D4ED8;font-weight:700;font-size:15px;line-height:1;padding:0 5px;border-radius:50%}
+.kml-badge button:hover{background:rgba(29,78,216,.18)}
+
+/* ── PHASE 1 QC SECTION ── */
+.p1-section{background:#FFFFFF;border:1px solid var(--border);border-radius:var(--rl);padding:20px 24px;margin-bottom:16px}
+.p1-head{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.p1-tag{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--green);background:var(--green-light);padding:3px 8px;border-radius:4px}
+.p1-title{font-size:14px;font-weight:600;color:var(--t-primary)}
+.p1-grid{margin-bottom:16px}
+.p1-breakdown th:nth-child(2),.p1-breakdown td:nth-child(2),.p1-breakdown th:nth-child(3),.p1-breakdown td:nth-child(3){text-align:right}
+.p1-note{margin-top:14px;background:var(--amber-bg);border:1px solid #FDE68A;border-radius:var(--r);padding:12px 14px;font-size:12.5px;line-height:1.6;color:#92400E}
+.p1-note strong{color:#92400E}
 </style>
 </head>
 <body>
@@ -234,170 +304,253 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
 <header class="header">
   <div class="brand">
     <span class="brand-awd">AWD</span>
-    <span class="brand-sub">VALIDATION PIPELINE</span>
+    <span class="brand-sub">Validation Pipeline</span>
   </div>
   <div class="hdiv"></div>
   <div class="meta">
-    <span class="chip run"><em>RUN</em>20260529_090633</span>
-    <span class="chip"><em>LOC</em>MAHARASHTRA · VIDARBHA</span>
-    <span class="chip"><em>STD</em>VCS v5.0 / VM0051</span>
-    <span class="chip"><em>PLOTS</em>30,774</span>
+    <span class="chip run"><em>RUN</em><span id="chip-run">—</span></span>
+    <span class="chip"><em>PLOTS</em><span id="chip-plots">—</span></span>
   </div>
   <div class="hactions">
     <div class="spill">
       <div class="sdot idle" id="sdot"></div>
-      <span id="stxt">IDLE</span>
+      <span id="stxt">Idle</span>
     </div>
-    <button class="btn btn-g" onclick="runPipeline('phase2')">▶ PHASE 2</button>
-    <button class="btn btn-p" onclick="runPipeline('full')">▶ FULL RUN</button>
+    <span class="kml-badge" id="kml-badge">KML: <span id="kml-badge-count">0</span> plots loaded<button onclick="clearKmlLayer()" title="Clear KML layer">&times;</button></span>
+    <input type="file" id="kml-file-input" accept=".kml,.kmz" style="display:none" onchange="handleKmlUpload(this)">
+    <button class="btn btn-g" onclick="document.getElementById('kml-file-input').click()">&#8593; Upload KML</button>
+    <div class="dropdown">
+      <button class="btn btn-g" onclick="toggleDownloadMenu(event)">&#128229; Download &#9662;</button>
+      <div class="dropdown-menu" id="dl-menu">
+
+        <div class="dd-sep">&#8212; Phase 1 &#8212;</div>
+        <button class="dd-item" onclick="dlGo('/api/download/phase1-report')"><span class="dd-ic">&#128229;</span><span class="dd-tx"><strong>Phase 1 Report (Excel)</strong><em>All plots — phase1_results.xlsx</em></span></button>
+        <button class="dd-item" onclick="dlGo('/api/download/needs-review')"><span class="dd-ic">&#128229;</span><span class="dd-tx"><strong>Needs Review — Phase 1 (Excel)</strong><em>705 flagged plots — needs_review_plots.xlsx</em></span></button>
+
+        <div class="dd-sep">&#8212; Phase 2 &#8212;</div>
+        <button class="dd-item" onclick="dlGo('/api/download/phase2-all')"><span class="dd-ic">&#128229;</span><span class="dd-tx"><strong>Phase 2 — All Plots (Excel)</strong><em>30,774 plots — phase2_results.xlsx</em></span></button>
+        <button class="dd-item" onclick="dlGo('/api/download/phase2-fully-eligible')"><span class="dd-ic">&#128229;</span><span class="dd-tx"><strong>Fully Eligible Only (Excel)</strong><em>fully_eligible_plots.xlsx</em></span></button>
+        <button class="dd-item" onclick="dlGo('/api/download/phase2-partially-eligible')"><span class="dd-ic">&#128229;</span><span class="dd-tx"><strong>Partially Eligible Only (Excel)</strong><em>partially_eligible_plots.xlsx</em></span></button>
+        <button class="dd-item" onclick="dlGo('/api/download/phase2-needs-review')"><span class="dd-ic">&#128229;</span><span class="dd-tx"><strong>Needs Review — Phase 2 (Excel)</strong><em>phase2_needs_review.xlsx</em></span></button>
+        <button class="dd-item" onclick="dlGo('/api/download/phase2-ineligible')"><span class="dd-ic">&#128229;</span><span class="dd-tx"><strong>Ineligible Only (Excel)</strong><em>ineligible_plots.xlsx</em></span></button>
+        <button class="dd-item" onclick="dlGo('/api/download/phase2-noneligible-breakdown')"><span class="dd-ic">&#128229;</span><span class="dd-tx"><strong>Non-Eligible Area Breakdown (Excel)</strong><em>noneligible_area_breakdown.xlsx</em></span></button>
+        <button class="dd-item" onclick="dlGo('/api/download/eligible-area-summary-pdf')"><span class="dd-ic">&#128240;</span><span class="dd-tx"><strong>Eligible Area Summary (PDF)</strong><em>eligible_area_summary.pdf</em></span></button>
+
+        <div class="dd-sep">&#8212; All Plots &#8212;</div>
+        <button class="dd-item" onclick="dlGo('/api/download/plots-geojson')"><span class="dd-ic">&#128229;</span><span class="dd-tx"><strong>All Plots (GeoJSON)</strong><em>latest 1F_plots_*.geojson</em></span></button>
+        <button class="dd-item" onclick="dlGo('/api/download/plots-kml')"><span class="dd-ic">&#128229;</span><span class="dd-tx"><strong>All Plots (KML)</strong><em>awd_plots_export.kml</em></span></button>
+
+      </div>
+    </div>
+    <button class="btn btn-g" onclick="runPipeline('phase2')">&#9654; Phase 2</button>
+    <button class="btn btn-p" onclick="runPipeline('full')">&#9654; Full Run</button>
   </div>
 </header>
 
 <!-- SIDEBAR -->
 <nav class="sidebar">
   <div class="ss">
-    <span class="slabel">VIEWS</span>
-    <button class="nitem active" data-tab="overview" onclick="switchTab('overview',this)"><div class="nd"></div>OVERVIEW</button>
-    <button class="nitem" data-tab="thresholds" onclick="switchTab('thresholds',this)"><div class="nd"></div>THRESHOLDS</button>
+    <span class="slabel">Views</span>
+    <button class="nitem active" data-tab="overview" onclick="switchTab('overview',this)"><div class="nd"></div>Overview</button>
+    <button class="nitem" data-tab="map" onclick="switchTab('map',this)"><div class="nd"></div>Map</button>
+    <button class="nitem" data-tab="thresholds" onclick="switchTab('thresholds',this)"><div class="nd"></div>Thresholds</button>
   </div>
   <div class="sdiv"></div>
   <div class="ss">
-    <span class="slabel">PIPELINE</span>
-    <button class="pbtn" onclick="runPipeline('phase1')">▶ RUN PHASE 1<span class="arr">→</span></button>
-    <button class="pbtn" onclick="runPipeline('phase2')">▶ RUN PHASE 2<span class="arr">→</span></button>
-    <button class="pbtn pp" onclick="runPipeline('full')">▶ FULL PIPELINE<span class="arr">→</span></button>
+    <span class="slabel">Pipeline</span>
+    <button class="pbtn" onclick="runPipeline('phase1')">&#9654; Run Phase 1<span class="arr">&#8594;</span></button>
+    <button class="pbtn" onclick="runPipeline('phase2')">&#9654; Run Phase 2<span class="arr">&#8594;</span></button>
+    <button class="pbtn pp" onclick="runPipeline('full')">&#9654; Full Pipeline<span class="arr">&#8594;</span></button>
   </div>
   <div class="sdiv"></div>
   <div class="ss">
-    <span class="slabel">CARBON SUMMARY</span>
-    <div class="srow"><span class="sl">Eligible Area</span><span class="sv g">15,041 ha</span></div>
-    <div class="srow"><span class="sl">Adj. Factor (avg)</span><span class="sv">0.9386</span></div>
-    <div class="srow"><span class="sl">For Review</span><span class="sv a">1,595</span></div>
-    <div class="srow"><span class="sl">Phase 1 Valid</span><span class="sv">30,774</span></div>
-    <div class="srow"><span class="sl">Total Input</span><span class="sv">31,479</span></div>
+    <span class="slabel">Carbon Summary</span>
+    <div class="srow"><span class="sl">Eligible Area</span><span class="sv g" id="s-elig-area">—</span></div>
+    <div class="srow"><span class="sl">Adj. Factor (avg)</span><span class="sv" id="s-adj-factor">—</span></div>
+    <div class="srow"><span class="sl">For Review</span><span class="sv a" id="s-review">—</span></div>
+    <div class="srow"><span class="sl">Total Plots</span><span class="sv" id="s-total">—</span></div>
   </div>
 </nav>
 
 <!-- CONTENT -->
-<main class="content">
+<main class="content" id="content-panel">
   <div class="ch">
     <div class="tabnav">
-      <button class="tabbtn active" onclick="switchTab('overview',null,this)">OVERVIEW</button>
-      <button class="tabbtn" onclick="switchTab('thresholds',null,this)">THRESHOLDS</button>
+      <button class="tabbtn active" onclick="switchTab('overview',null,this)">Overview</button>
+      <button class="tabbtn" onclick="switchTab('map',null,this)">Map</button>
+      <button class="tabbtn" onclick="switchTab('thresholds',null,this)">Thresholds</button>
     </div>
-    <div class="runinfo">Last run <strong>2026-05-29 09:07 UTC</strong> · 66.1s total</div>
+    <div class="runinfo" id="run-info">No run loaded</div>
   </div>
 
   <!-- OVERVIEW -->
   <div class="tp active" id="tab-overview">
 
-    <!-- Stat cards -->
-    <div class="sgrid">
-      <div class="sc el">
-        <div class="sc-label">FULLY ELIGIBLE</div>
-        <div class="sc-num" id="c0" data-t="23066">0</div>
-        <div class="sc-pct">74.95%</div>
-        <div class="sc-track"><div class="sc-fill" data-w="74.95"></div></div>
+    <!-- PHASE 1 — PLOT CREATION QC -->
+    <div class="p1-section">
+      <div class="p1-head">
+        <span class="p1-tag">Phase 1</span>
+        <span class="p1-title">Plot Creation QC</span>
       </div>
-      <div class="sc pa">
-        <div class="sc-label">PARTIALLY ELIGIBLE</div>
-        <div class="sc-num" id="c1" data-t="5358">0</div>
-        <div class="sc-pct">17.41%</div>
-        <div class="sc-track"><div class="sc-fill" data-w="17.41"></div></div>
+      <div class="sgrid p1-grid">
+        <div class="sc el">
+          <div class="sc-label">Pass</div>
+          <div class="sc-num" id="p1-pass">—</div>
+          <div class="sc-pct" id="p1-pass-pct">—</div>
+        </div>
+        <div class="sc rv">
+          <div class="sc-label">Needs Review</div>
+          <div class="sc-num" id="p1-review">—</div>
+          <div class="sc-pct" id="p1-review-pct">—</div>
+        </div>
+        <div class="sc pa">
+          <div class="sc-label">Special Chars</div>
+          <div class="sc-num" id="p1-special">—</div>
+          <div class="sc-pct">new finding</div>
+        </div>
+        <div class="sc">
+          <div class="sc-label">Total</div>
+          <div class="sc-num" id="p1-total">—</div>
+          <div class="sc-pct">all plots</div>
+        </div>
       </div>
-      <div class="sc rv">
-        <div class="sc-label">NEEDS REVIEW</div>
-        <div class="sc-num" id="c2" data-t="1595">0</div>
-        <div class="sc-pct">5.18%</div>
-        <div class="sc-track"><div class="sc-fill" data-w="5.18"></div></div>
-      </div>
-      <div class="sc in">
-        <div class="sc-label">INELIGIBLE</div>
-        <div class="sc-num" id="c3" data-t="755">0</div>
-        <div class="sc-pct">2.45%</div>
-        <div class="sc-track"><div class="sc-fill" data-w="2.45"></div></div>
+      <table class="ltable p1-breakdown">
+        <thead><tr><th>Issue Type</th><th>Count</th><th>% of Total</th></tr></thead>
+        <tbody id="p1-breakdown-body">
+          <tr><td colspan="3" style="color:var(--t-muted)">Loading…</td></tr>
+        </tbody>
+      </table>
+      <div class="p1-note">
+        &#9888; <strong>NOTE:</strong> All plots in NEEDS REVIEW status require field
+        correction before proceeding to Phase 2 eligibility checking. These plots are
+        excluded from all carbon calculations until resolved. See Phase 1 Report (Excel)
+        for plot-by-plot action instructions.
       </div>
     </div>
 
-    <!-- Phase results + donut -->
+    <div class="sgrid">
+      <div class="sc el">
+        <div class="sc-label">Fully Eligible</div>
+        <div class="sc-num" id="c0" data-t="0">0</div>
+        <div class="sc-pct" id="p0">—</div>
+        <div class="sc-track"><div class="sc-fill" id="f0"></div></div>
+      </div>
+      <div class="sc pa">
+        <div class="sc-label">Partially Eligible</div>
+        <div class="sc-num" id="c1" data-t="0">0</div>
+        <div class="sc-pct" id="p1">—</div>
+        <div class="sc-track"><div class="sc-fill" id="f1"></div></div>
+      </div>
+      <div class="sc rv">
+        <div class="sc-label">Needs Review</div>
+        <div class="sc-num" id="c2" data-t="0">0</div>
+        <div class="sc-pct" id="p2">—</div>
+        <div class="sc-track"><div class="sc-fill" id="f2"></div></div>
+      </div>
+      <div class="sc in">
+        <div class="sc-label">Ineligible</div>
+        <div class="sc-num" id="c3" data-t="0">0</div>
+        <div class="sc-pct" id="p3">—</div>
+        <div class="sc-track"><div class="sc-fill" id="f3"></div></div>
+      </div>
+    </div>
+
     <div class="rrow">
       <div class="panel">
-        <div class="ptitle">NON-ELIGIBLE OVERLAP BY SOURCE</div>
+        <div class="ptitle">Non-Eligible Overlap by Source</div>
         <div class="phrow">
-          <span class="phid">2A</span><span class="phname">FOREST</span>
+          <span class="phid">2A</span><span class="phname">Forest</span>
           <div class="phtrack"><div class="phfill pf-forest" data-w="89"></div></div>
           <span class="phcount">2,733 plots</span>
         </div>
         <div class="phrow">
-          <span class="phid">2B</span><span class="phname">WATER BODIES</span>
+          <span class="phid">2B</span><span class="phname">Water Bodies</span>
           <div class="phtrack"><div class="phfill pf-water" data-w="3.7"></div></div>
           <span class="phcount">102 plots</span>
         </div>
         <div class="phrow">
-          <span class="phid">2C</span><span class="phname">ROADS</span>
+          <span class="phid">2C</span><span class="phname">Roads</span>
           <div class="phtrack"><div class="phfill pf-roads" data-w="50.5"></div></div>
           <span class="phcount">1,618 plots</span>
         </div>
         <div class="phrow">
-          <span class="phid">2C</span><span class="phname">RAILWAYS</span>
+          <span class="phid">2C</span><span class="phname">Railways</span>
           <div class="phtrack"><div class="phfill pf-rail" data-w="1.0"></div></div>
           <span class="phcount">12 plots</span>
         </div>
         <div class="phrow">
-          <span class="phid">2C</span><span class="phname">SETTLEMENTS</span>
+          <span class="phid">2C</span><span class="phname">Settlements</span>
           <div class="phtrack"><div class="phfill pf-settle" data-w="60"></div></div>
           <span class="phcount">1,843 plots</span>
         </div>
         <div class="phrow">
-          <span class="phid">2C</span><span class="phname">BUILDINGS</span>
+          <span class="phid">2C</span><span class="phname">Buildings</span>
           <div class="phtrack"><div class="phfill pf-build" data-w="100"></div></div>
           <span class="phcount">3,333 plots</span>
         </div>
       </div>
-
       <div class="panel donut-wrap">
-        <div class="ptitle" style="align-self:flex-start">ELIGIBILITY SPLIT</div>
-        <div class="donut">
+        <div class="ptitle" style="align-self:flex-start">Eligibility Split</div>
+        <div class="donut" id="donut-chart">
           <div class="donut-hole">
-            <span class="dnum">30,774</span>
-            <span class="dlabel">TOTAL</span>
+            <span class="dnum" id="donut-total">—</span>
+            <span class="dlabel">Total</span>
           </div>
         </div>
         <div class="dleg">
-          <div class="dlrow"><div class="dldot" style="background:var(--green)"></div><span class="dltext">ELIGIBLE</span><span class="dlval">74.95%</span></div>
-          <div class="dlrow"><div class="dldot" style="background:var(--amber)"></div><span class="dltext">PARTIAL</span><span class="dlval">17.41%</span></div>
-          <div class="dlrow"><div class="dldot" style="background:var(--blue)"></div><span class="dltext">REVIEW</span><span class="dlval">5.18%</span></div>
-          <div class="dlrow"><div class="dldot" style="background:var(--red)"></div><span class="dltext">INELIGIBLE</span><span class="dlval">2.45%</span></div>
+          <div class="dlrow"><div class="dldot" style="background:#2D6A4F"></div><span class="dltext">Eligible</span><span class="dlval" id="dl0">—</span></div>
+          <div class="dlrow"><div class="dldot" style="background:#D97706"></div><span class="dltext">Partial</span><span class="dlval" id="dl1">—</span></div>
+          <div class="dlrow"><div class="dldot" style="background:#6B7280"></div><span class="dltext">Review</span><span class="dlval" id="dl2">—</span></div>
+          <div class="dlrow"><div class="dldot" style="background:#DC2626"></div><span class="dltext">Ineligible</span><span class="dlval" id="dl3">—</span></div>
         </div>
       </div>
     </div>
 
-    <!-- Data layers -->
     <div class="panel">
-      <div class="ptitle">REFERENCE DATA LAYERS — CURRENT STATE</div>
+      <div class="ptitle">Reference Data Layers — Current State</div>
       <table class="ltable">
-        <thead><tr><th>LAYER FILE</th><th>SOURCE</th><th>STATUS</th><th>FEATURES</th></tr></thead>
+        <thead><tr><th>Layer File</th><th>Source</th><th>Status</th><th>Features</th></tr></thead>
         <tbody>
-          <tr><td><span class="lname">forest_maharashtra_rfa.gpkg</span></td><td><span class="lsrc">Bharatmaps RFA</span></td><td><span class="badge ba">● ACTIVE</span></td><td><span class="lcount">792</span></td></tr>
-          <tr><td><span class="lname">forest_hansen_canopy_2023.gpkg</span></td><td><span class="lsrc">Hansen GFC-2024-v1.12</span></td><td><span class="badge ba">● ACTIVE</span></td><td><span class="lcount">1,221</span></td></tr>
-          <tr><td><span class="lname">water_bodies.gpkg</span></td><td><span class="lsrc">OSM natural=water</span></td><td><span class="badge bw">⚠ INCOMPLETE</span></td><td><span class="lcount">394</span></td></tr>
-          <tr><td><span class="lname">water_jrc_permanent.gpkg</span></td><td><span class="lsrc">JRC GSW occurrence ≥75%</span></td><td><span class="badge ba">● ACTIVE</span></td><td><span class="lcount">0</span></td></tr>
-          <tr><td><span class="lname">roads.gpkg</span></td><td><span class="lsrc">OSM highway (5m buffer)</span></td><td><span class="badge ba">● ACTIVE</span></td><td><span class="lcount">2,829</span></td></tr>
-          <tr><td><span class="lname">railways.gpkg</span></td><td><span class="lsrc">OSM railway (10m buffer)</span></td><td><span class="badge ba">● ACTIVE</span></td><td><span class="lcount">91</span></td></tr>
-          <tr><td><span class="lname">settlements.gpkg</span></td><td><span class="lsrc">OSM place/landuse</span></td><td><span class="badge ba">● ACTIVE</span></td><td><span class="lcount">1,701</span></td></tr>
-          <tr><td><span class="lname">buildings.gpkg</span></td><td><span class="lsrc">Microsoft ML Buildings</span></td><td><span class="badge bd">○ SUPERSEDED</span></td><td><span class="lcount">54,750</span></td></tr>
-          <tr><td><span class="lname">buildings_merged.gpkg</span></td><td><span class="lsrc">Microsoft + Google OB v3</span></td><td><span class="badge ba">● ACTIVE</span></td><td><span class="lcount">486,986</span></td></tr>
+          <tr><td><span class="lname">forest_maharashtra_rfa.gpkg</span></td><td><span class="lsrc">Bharatmaps RFA</span></td><td><span class="badge ba">&#9679; Active</span></td><td><span class="lcount">792</span></td></tr>
+          <tr><td><span class="lname">forest_hansen_canopy_2023.gpkg</span></td><td><span class="lsrc">Hansen GFC-2024-v1.12</span></td><td><span class="badge ba">&#9679; Active</span></td><td><span class="lcount">1,221</span></td></tr>
+          <tr><td><span class="lname">water_bodies.gpkg</span></td><td><span class="lsrc">OSM natural=water</span></td><td><span class="badge br">&#9711; Reference only &#8212; not used in eligibility</span></td><td><span class="lcount">394</span></td></tr>
+          <tr><td><span class="lname">water_jrc_permanent.gpkg</span></td><td><span class="lsrc">JRC GSW occurrence &ge;75%</span></td><td><span class="badge ba">&#9679; Active</span></td><td><span class="lcount">0</span></td></tr>
+          <tr><td><span class="lname">roads.gpkg</span></td><td><span class="lsrc">OSM highway (5m buffer)</span></td><td><span class="badge ba">&#9679; Active</span></td><td><span class="lcount">2,829</span></td></tr>
+          <tr><td><span class="lname">railways.gpkg</span></td><td><span class="lsrc">OSM railway (10m buffer)</span></td><td><span class="badge ba">&#9679; Active</span></td><td><span class="lcount">91</span></td></tr>
+          <tr><td><span class="lname">settlements.gpkg</span></td><td><span class="lsrc">OSM place/landuse</span></td><td><span class="badge ba">&#9679; Active</span></td><td><span class="lcount">1,701</span></td></tr>
+          <tr><td><span class="lname">buildings_merged.gpkg</span></td><td><span class="lsrc">Microsoft + Google OB v3</span></td><td><span class="badge ba">&#9679; Active</span></td><td><span class="lcount">486,986</span></td></tr>
         </tbody>
       </table>
+    </div>
+  </div>
+
+  <!-- MAP TAB -->
+  <div class="tp map-panel" id="tab-map">
+    <div id="map-container" style="position:relative;flex:1;">
+      <div id="map-loading">Loading plots&hellip;</div>
+      <div id="map"></div>
+      <div id="map-count-badge">
+        Total plots on map: <span id="map-plot-count">0</span>
+      </div>
+      <!-- Legend always visible on map -->
+      <div class="map-legend" id="map-legend">
+        <div class="leg-title">Legend</div>
+        <div class="leg-row"><div class="leg-dot" style="background:#2D6A4F"></div><span class="leg-name">Fully Eligible</span><span class="leg-count" id="leg-c0">—</span><span class="leg-pct" id="leg-p0">—</span></div>
+        <div class="leg-row"><div class="leg-dot" style="background:#D97706"></div><span class="leg-name">Partially Eligible</span><span class="leg-count" id="leg-c1">—</span><span class="leg-pct" id="leg-p1">—</span></div>
+        <div class="leg-row"><div class="leg-dot" style="background:#6B7280"></div><span class="leg-name">Needs Review</span><span class="leg-count" id="leg-c2">—</span><span class="leg-pct" id="leg-p2">—</span></div>
+        <div class="leg-row"><div class="leg-dot" style="background:#DC2626"></div><span class="leg-name">Ineligible</span><span class="leg-count" id="leg-c3">—</span><span class="leg-pct" id="leg-p3">—</span></div>
+        <div class="leg-div"></div>
+        <div class="leg-row"><span class="leg-total">Total &nbsp;</span><span class="leg-count" id="leg-total">—</span><span class="leg-pct">100%</span></div>
+        <div class="leg-area" id="leg-area">Net Eligible Area: —</div>
+      </div>
     </div>
   </div>
 
   <!-- THRESHOLDS -->
   <div class="tp" id="tab-thresholds">
     <div class="tgroups">
-
       <div class="tgroup">
-        <div class="ghead"><span class="gphase">PHASE 1</span><span class="gtitle">GEOMETRY & TOPOLOGY</span></div>
+        <div class="ghead"><span class="gphase">Phase 1</span><span class="gtitle">Geometry &amp; Topology</span></div>
         <div class="titems">
           <div>
             <div class="tmrow"><span class="tlabel">Overlap threshold</span><span class="tunit">%</span></div>
@@ -412,29 +565,27 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
           <div>
             <div class="tmrow"><span class="tlabel">Sliver artifact threshold</span><span class="tunit">ha</span></div>
             <div class="tsrow"><input type="range" min="0.0001" max="0.01" step="0.0001" value="0.001" class="th-slider" id="s-sl"><span class="tval" id="v-sl">0.0010</span></div>
-            <div class="thint">Geometry artifacts below this are automatically dropped</div>
+            <div class="thint">Geometry artifacts below this are flagged</div>
           </div>
         </div>
       </div>
-
       <div class="tgroup">
-        <div class="ghead"><span class="gphase">PHASE 2A</span><span class="gtitle">FOREST DEFINITION · MAHARASHTRA FSI</span></div>
+        <div class="ghead"><span class="gphase">Phase 2A</span><span class="gtitle">Forest Definition &middot; CDM DNA / FSI</span></div>
         <div class="titems">
           <div>
             <div class="tmrow"><span class="tlabel">Minimum forest polygon area</span><span class="tunit">ha</span></div>
             <div class="tsrow"><input type="range" min="0.1" max="5" step="0.1" value="1.0" class="th-slider" id="s-fa"><span class="tval" id="v-fa">1.0</span></div>
-            <div class="thint">Maharashtra FSI confirmed: ≥1.0 ha — do not lower</div>
+            <div class="thint">FSI confirmed: &ge;1.0 ha — do not lower</div>
           </div>
           <div>
             <div class="tmrow"><span class="tlabel">Canopy cover threshold</span><span class="tunit">%</span></div>
             <div class="tsrow"><input type="range" min="5" max="50" step="1" value="10" class="th-slider" id="s-cc"><span class="tval" id="v-cc">10</span></div>
-            <div class="thint">CDM DNA / Maharashtra FSI confirmed: ≥10% canopy</div>
+            <div class="thint">CDM DNA confirmed: &ge;10% canopy</div>
           </div>
         </div>
       </div>
-
       <div class="tgroup">
-        <div class="ghead"><span class="gphase">PHASE 2B</span><span class="gtitle">WATER BODIES</span></div>
+        <div class="ghead"><span class="gphase">Phase 2B</span><span class="gtitle">Water Bodies</span></div>
         <div class="titems">
           <div>
             <div class="tmrow"><span class="tlabel">Min water body area</span><span class="tunit">ha</span></div>
@@ -444,13 +595,12 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
           <div>
             <div class="tmrow"><span class="tlabel">JRC occurrence threshold</span><span class="tunit">%</span></div>
             <div class="tsrow"><input type="range" min="50" max="90" step="5" value="75" class="th-slider" id="s-jrc"><span class="tval" id="v-jrc">75</span></div>
-            <div class="thint">≥75% = permanent water (JRC Global Surface Water v1.4)</div>
+            <div class="thint">&ge;75% = permanent water (JRC Global Surface Water v1.4)</div>
           </div>
         </div>
       </div>
-
       <div class="tgroup">
-        <div class="ghead"><span class="gphase">PHASE 2C</span><span class="gtitle">INFRASTRUCTURE BUFFERS</span></div>
+        <div class="ghead"><span class="gphase">Phase 2C</span><span class="gtitle">Infrastructure Buffers</span></div>
         <div class="titems">
           <div>
             <div class="tmrow"><span class="tlabel">Roads buffer</span><span class="tunit">m</span></div>
@@ -464,27 +614,25 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
           </div>
         </div>
       </div>
-
       <div class="tgroup">
-        <div class="ghead"><span class="gphase">PHASE 2E</span><span class="gtitle">ELIGIBILITY CLASSIFICATION</span></div>
+        <div class="ghead"><span class="gphase">Phase 2E</span><span class="gtitle">Eligibility Classification</span></div>
         <div class="titems">
           <div>
             <div class="tmrow"><span class="tlabel">Flag for review if eligible below</span><span class="tunit">%</span></div>
             <div class="tsrow"><input type="range" min="50" max="95" step="5" value="75" class="th-slider" id="s-rv"><span class="tval" id="v-rv">75</span></div>
-            <div class="thint">Currently flagging 1,595 plots — awaiting Jibotosh decision</div>
+            <div class="thint">Awaiting Jibotosh decision on threshold</div>
           </div>
           <div>
             <div class="tmrow"><span class="tlabel">Min eligible % to retain plot</span><span class="tunit">%</span></div>
             <div class="tsrow"><input type="range" min="0" max="50" step="5" value="0" class="th-slider" id="s-pt"><span class="tval a" id="v-pt">PENDING</span></div>
-            <div class="thint">⚠ PENDING — awaiting Jibotosh confirmation before enabling</div>
+            <div class="thint">Pending — awaiting Jibotosh confirmation before enabling</div>
           </div>
         </div>
       </div>
-
     </div>
     <div class="apply-bar">
       <span class="anote">Changes update <span>config/settings.yaml</span> and rerun Phase 2 (~66s)</span>
-      <button class="btn-apply" onclick="applyThresholds()">APPLY & RERUN PHASE 2</button>
+      <button class="btn-apply" onclick="applyThresholds()">Apply &amp; Rerun Phase 2</button>
     </div>
   </div>
 
@@ -493,10 +641,10 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
 <!-- LOG PANEL -->
 <aside class="log-panel">
   <div class="log-hd">
-    <span class="log-title">LIVE LOG</span>
-    <button class="lf active" onclick="setLF('all',this)">ALL</button>
-    <button class="lf" onclick="setLF('warning',this)">WARN</button>
-    <button class="lf" onclick="setLF('error',this)">ERR</button>
+    <span class="log-title">Live Log</span>
+    <button class="lf active" onclick="setLF('all',this)">All</button>
+    <button class="lf" onclick="setLF('warning',this)">Warn</button>
+    <button class="lf" onclick="setLF('error',this)">Err</button>
   </div>
   <div class="log-stream" id="ls"></div>
 </aside>
@@ -504,248 +652,614 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
 </div>
 
 <script>
-let lf='all';
+// ── STATE ─────────────────────────────────────────────────────────────────────
+let lf = 'all';
+let _map = null;
+let _mapLayer = null;
+let _mapLoaded = false;
+let _selectedLayer = null;
 
-function fmt(n,t){
-  const v=+n,mn=+t.min,mx=+t.max,st=+t.step;
-  if(st>=1)return v.toFixed(0);
-  if(st>=0.1)return v.toFixed(1);
-  if(st>=0.01)return v.toFixed(2);
+// ── STATUS COLORS ─────────────────────────────────────────────────────────────
+const STATUS_COLORS = {
+  FULLY_ELIGIBLE:     '#2D6A4F',
+  ELIGIBLE:           '#2D6A4F',
+  PARTIALLY_ELIGIBLE: '#D97706',
+  NEEDS_REVIEW:       '#6B7280',
+  INELIGIBLE:         '#DC2626',
+  PENDING:            '#9CA3AF',
+};
+
+// ── TAB SWITCHING ─────────────────────────────────────────────────────────────
+function switchTab(tab, nbtn, tbtn) {
+  // Update content panel class for map full-height
+  const panel = document.getElementById('content-panel');
+  if (tab === 'map') {
+    panel.style.padding = '0';
+    panel.style.overflowY = 'hidden';
+    panel.style.display = 'flex';
+    panel.style.flexDirection = 'column';
+  } else {
+    panel.style.padding = '24px';
+    panel.style.overflowY = 'auto';
+    panel.style.display = '';
+    panel.style.flexDirection = '';
+  }
+
+  document.querySelectorAll('.tp').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+
+  document.querySelectorAll('.nitem[data-tab]').forEach(b =>
+    b.classList.toggle('active', b.dataset.tab === tab)
+  );
+  document.querySelectorAll('.tabbtn').forEach(b => b.classList.remove('active'));
+  if (tbtn) tbtn.classList.add('active');
+  if (nbtn) {
+    const tabs = ['overview', 'map', 'thresholds'];
+    document.querySelectorAll('.tabbtn').forEach((b, i) =>
+      b.classList.toggle('active', tabs[i] === tab)
+    );
+  }
+
+  if (tab === 'map') {
+    document.querySelector('.ch').style.display = 'none';
+    if (!_mapLoaded) initMap();
+    else if (_map) setTimeout(() => _map.invalidateSize(), 50);
+  } else {
+    document.querySelector('.ch').style.display = '';
+  }
+}
+
+// ── MAP INITIALISATION ────────────────────────────────────────────────────────
+function initMap() {
+  if (_map) return;
+  const container = document.getElementById('map');
+  container.style.height = '100%';
+
+  _map = L.map('map', {
+    zoomControl: false,
+    maxZoom: 21,
+  }).setView([20.0, 77.0], 7);
+
+  // OSM tile layer — max zoom 19
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors',
+    maxZoom: 19,
+  }).addTo(_map);
+
+  // Zoom controls (visible, top-right)
+  L.control.zoom({ position: 'topright' }).addTo(_map);
+
+  loadMapPlots();
+}
+
+async function loadMapPlots() {
+  const loading = document.getElementById('map-loading');
+  loading.style.display = 'flex';
+  loading.textContent = 'Loading plots…';
+
+  try {
+    const resp = await fetch('/api/plots');
+    if (!resp.ok) {
+      loading.textContent = 'No Phase 1 data. Run Phase 1 pipeline first.';
+      return;
+    }
+    const geojson = await resp.json();
+    renderMapPlots(geojson);
+  } catch (e) {
+    loading.textContent = 'Error loading plots: ' + e.message;
+  }
+}
+
+function renderMapPlots(geojson) {
+  const features = geojson.features || [];
+  const statusCounts = { FULLY_ELIGIBLE: 0, ELIGIBLE: 0, PARTIALLY_ELIGIBLE: 0, NEEDS_REVIEW: 0, INELIGIBLE: 0 };
+  const pointFeatures = [];
+  const polyFeatures = [];
+
+  features.forEach(f => {
+    const s = (f.properties || {}).status || 'PENDING';
+    if (statusCounts.hasOwnProperty(s)) statusCounts[s]++;
+    const g = f.geometry;
+    if (!g) {
+      pointFeatures.push(f);
+    } else if (g.type === 'Point') {
+      pointFeatures.push(f);
+    } else {
+      polyFeatures.push(f);
+    }
+  });
+
+  const polyGJ = { type: 'FeatureCollection', features: polyFeatures };
+  const polyLayer = L.geoJSON(polyGJ, {
+    style: feature => {
+      const s = feature.properties.status || 'PENDING';
+      const c = STATUS_COLORS[s] || '#9CA3AF';
+      return { fillColor: c, color: '#FFFFFF', weight: 1, fillOpacity: 0.72 };
+    },
+    onEachFeature: (feature, layer) => {
+      layer.on('click', () => showPlotPopup(feature, layer));
+    },
+  }).addTo(_map);
+
+  // Point markers for null/invalid geometries
+  pointFeatures.forEach(f => {
+    const p = f.properties || {};
+    const s = p.status || 'PENDING';
+    const c = STATUS_COLORS[s] || '#9CA3AF';
+    const g = f.geometry;
+    if (!g) return;
+    const coords = g.coordinates;
+    const marker = L.circleMarker([coords[1], coords[0]], {
+      radius: 5, color: c, fillColor: c, fillOpacity: 0.8, weight: 1,
+    });
+    marker.on('click', () => showPlotPopup(f, marker));
+    marker.addTo(_map);
+  });
+
+  // Fit map to data
+  if (polyFeatures.length > 0) {
+    try { _map.fitBounds(polyLayer.getBounds(), { padding: [20, 20] }); } catch (_) {}
+  }
+
+  const total = features.length;
+  document.getElementById('map-plot-count').textContent = total.toLocaleString();
+  document.getElementById('chip-plots').textContent = total.toLocaleString();
+  _mapLoaded = true;
+
+  updateLegend(statusCounts, total);
+
+  document.getElementById('map-loading').style.display = 'none';
+  addLog('success', `Map loaded: ${total.toLocaleString()} plots`);
+}
+
+function showPlotPopup(feature, layer) {
+  const p = feature.properties || {};
+  const s = p.status || 'PENDING';
+  const statusClass = s.replace(/_/g, '_');
+  const areaStr = p.area_ha ? p.area_ha.toFixed(4) + ' ha' : '—';
+  const plotId = p.plot_id || '—';
+  const name = p.name || '—';
+  const problem = p.problem || '—';
+  const whatToDo = p.what_to_do || '—';
+
+  const html = `
+    <div class="pop-row"><span class="pop-lbl">Plot ID</span><span class="pop-val" id="pop-id-val">${escHtml(plotId)}</span></div>
+    <div class="pop-row"><span class="pop-lbl">Name</span><span class="pop-val" id="pop-name-val">${escHtml(name)}</span></div>
+    <div class="pop-row"><span class="pop-lbl">Status</span><span class="pop-status ${statusClass}">${s.replace(/_/g,' ')}</span></div>
+    <div class="pop-row"><span class="pop-lbl">Area</span><span class="pop-val">${areaStr}</span></div>
+    <div class="pop-row"><span class="pop-lbl">Problem</span><span class="pop-val" style="color:#D97706">${escHtml(problem)}</span></div>
+    <div class="pop-row"><span class="pop-lbl">What to do</span><span class="pop-val">${escHtml(whatToDo)}</span></div>
+    <div class="pop-actions">
+      <button class="pop-btn" onclick="copyToClip('${escHtml(plotId)}', this)">Copy ID</button>
+      <button class="pop-btn" onclick="copyToClip('${escHtml(name)}', this)">Copy Name</button>
+      <button class="pop-btn zoom-btn" onclick="zoomToLayer()">Zoom to Plot</button>
+    </div>
+  `;
+
+  // Store reference for zoom
+  window._currentPopupLayer = layer;
+  window._currentFeature = feature;
+
+  const popup = L.popup({ maxWidth: 340, minWidth: 260 })
+    .setContent(html);
+
+  if (layer.getLatLng) {
+    popup.setLatLng(layer.getLatLng());
+  } else if (layer.getBounds) {
+    popup.setLatLng(layer.getBounds().getCenter());
+  }
+  popup.openOn(_map);
+}
+
+function zoomToLayer() {
+  const layer = window._currentPopupLayer;
+  if (!layer) return;
+  try {
+    if (layer.getBounds) {
+      _map.fitBounds(layer.getBounds(), { maxZoom: 19, padding: [40, 40] });
+    } else if (layer.getLatLng) {
+      _map.setView(layer.getLatLng(), 19);
+    }
+  } catch (_) {}
+}
+
+function copyToClip(text, btn) {
+  const orig = btn.textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = 'Copied';
+    setTimeout(() => { btn.textContent = orig; }, 1500);
+  }).catch(() => {
+    // Fallback
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    btn.textContent = 'Copied';
+    setTimeout(() => { btn.textContent = orig; }, 1500);
+  });
+}
+
+function updateLegend(counts, total) {
+  const order = ['FULLY_ELIGIBLE', 'PARTIALLY_ELIGIBLE', 'NEEDS_REVIEW', 'INELIGIBLE'];
+  order.forEach((k, i) => {
+    const c = counts[k] || 0;
+    const pct = total > 0 ? (c / total * 100).toFixed(2) + '%' : '—';
+    const el = document.getElementById('leg-c' + i);
+    const ep = document.getElementById('leg-p' + i);
+    if (el) el.textContent = c.toLocaleString();
+    if (ep) ep.textContent = pct;
+  });
+  const lt = document.getElementById('leg-total');
+  if (lt) lt.textContent = total.toLocaleString();
+}
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ── SLIDERS ───────────────────────────────────────────────────────────────────
+function fmt(n, t) {
+  const v = +n, mn = +t.min, mx = +t.max, st = +t.step;
+  if (st >= 1) return v.toFixed(0);
+  if (st >= 0.1) return v.toFixed(1);
+  if (st >= 0.01) return v.toFixed(2);
   return v.toFixed(4);
 }
 
-function initSliders(){
-  document.querySelectorAll('.th-slider').forEach(s=>{
-    const id=s.id.replace('s-','v-');
-    const vel=document.getElementById(id);
-    const upd=()=>{
-      const mn=+s.min,mx=+s.max,v=+s.value;
-      const p=((v-mn)/(mx-mn)*100).toFixed(1)+'%';
-      s.style.setProperty('--fill',p);
-      if(vel&&!vel.classList.contains('a')){vel.textContent=fmt(v,s);}
+function initSliders() {
+  document.querySelectorAll('.th-slider').forEach(s => {
+    const id = s.id.replace('s-', 'v-');
+    const vel = document.getElementById(id);
+    const upd = () => {
+      const mn = +s.min, mx = +s.max, v = +s.value;
+      const p = ((v - mn) / (mx - mn) * 100).toFixed(1) + '%';
+      s.style.setProperty('--fill', p);
+      if (vel && !vel.classList.contains('a')) { vel.textContent = fmt(v, s); }
     };
-    s.addEventListener('input',upd);
+    s.addEventListener('input', upd);
     upd();
   });
 }
 
-function switchTab(tab,nbtn,tbtn){
-  document.querySelectorAll('.tp').forEach(p=>p.classList.remove('active'));
-  document.getElementById('tab-'+tab).classList.add('active');
-  document.querySelectorAll('.nitem[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
-  document.querySelectorAll('.tabbtn').forEach(b=>b.classList.remove('active'));
-  if(tbtn)tbtn.classList.add('active');
-  if(nbtn){
-    document.querySelectorAll('.tabbtn').forEach((b,i)=>{
-      b.classList.toggle('active',['overview','thresholds'][i]===tab);
-    });
-  }
+// ── LOG ───────────────────────────────────────────────────────────────────────
+function addLog(lvl, msg) {
+  if (lf !== 'all' && lvl !== lf) return;
+  const s = document.getElementById('ls');
+  const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
+  const d = document.createElement('div');
+  d.className = 'le ' + lvl; d.dataset.lvl = lvl;
+  d.innerHTML = `<span class="lts">${now}</span><span class="lmsg">${msg}</span>`;
+  s.appendChild(d); s.scrollTop = s.scrollHeight;
 }
 
-function addLog(lvl,msg){
-  if(lf!=='all'&&lvl!==lf)return;
-  const s=document.getElementById('ls');
-  const now=new Date().toISOString().replace('T',' ').slice(0,19);
-  const d=document.createElement('div');
-  d.className='le '+lvl;d.dataset.lvl=lvl;
-  d.innerHTML=`<span class="lts">${now}</span><span class="lmsg">${msg}</span>`;
-  s.appendChild(d);s.scrollTop=s.scrollHeight;
-}
-
-function setLF(f,btn){
-  lf=f;
-  document.querySelectorAll('.lf').forEach(b=>b.classList.remove('active'));
+function setLF(f, btn) {
+  lf = f;
+  document.querySelectorAll('.lf').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  document.querySelectorAll('.le').forEach(e=>{
-    e.style.display=(f==='all'||e.dataset.lvl===f)?'':'none';
+  document.querySelectorAll('.le').forEach(e => {
+    e.style.display = (f === 'all' || e.dataset.lvl === f) ? '' : 'none';
   });
 }
 
-function setStatus(s){
-  const d=document.getElementById('sdot');
-  const t=document.getElementById('stxt');
-  d.className='sdot '+s;t.textContent=s.toUpperCase();
+function setStatus(s) {
+  const d = document.getElementById('sdot');
+  const t = document.getElementById('stxt');
+  d.className = 'sdot ' + s;
+  t.textContent = s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-function animateCounter(el,target,dur){
-  const start=performance.now();
-  const go=now=>{
-    const p=Math.min((now-start)/dur,1);
-    const e=1-Math.pow(1-p,3);
-    el.textContent=Math.round(e*target).toLocaleString();
-    if(p<1)requestAnimationFrame(go);
+function animateCounter(el, target, dur) {
+  const start = performance.now();
+  const go = now => {
+    const p = Math.min((now - start) / dur, 1);
+    const e = 1 - Math.pow(1 - p, 3);
+    el.textContent = Math.round(e * target).toLocaleString();
+    if (p < 1) requestAnimationFrame(go);
   };
   requestAnimationFrame(go);
 }
 
-// ── API CLIENT ───────────────────────────────────────────────────────────────
-
-async function loadResults(){
-  try{
-    const r=await fetch('/api/results/latest');
-    if(!r.ok)return;
-    const d=await r.json();
+// ── API CLIENT ────────────────────────────────────────────────────────────────
+async function loadResults() {
+  try {
+    const r = await fetch('/api/results/latest');
+    if (!r.ok) return;
+    const d = await r.json();
     updateDashboard(d);
-  }catch(e){addLog('error','Failed to load results: '+e.message);}
+  } catch (e) { addLog('error', 'Failed to load results: ' + e.message); }
 }
 
-function updateDashboard(d){
-  const s=d.phase2_status_summary||{};
-  const c=d.carbon_summary||{};
-  const order=['FULLY_ELIGIBLE','PARTIALLY_ELIGIBLE','NEEDS_REVIEW','INELIGIBLE'];
-  const numIds=['c0','c1','c2','c3'];
-  const pctSels=['.sc.el .sc-pct','.sc.pa .sc-pct','.sc.rv .sc-pct','.sc.in .sc-pct'];
-  const fillSels=['.sc.el .sc-fill','.sc.pa .sc-fill','.sc.rv .sc-fill','.sc.in .sc-fill'];
-  order.forEach((key,i)=>{
-    const v=s[key]||{};
-    const el=document.getElementById(numIds[i]);
-    if(el)animateCounter(el,v.count||0,1400);
-    const pEl=document.querySelector(pctSels[i]);
-    if(pEl)pEl.textContent=(v.pct||0).toFixed(2)+'%';
-    const fEl=document.querySelector(fillSels[i]);
-    if(fEl)setTimeout(()=>fEl.style.width=(v.pct||0)+'%',150);
+function updateDashboard(d) {
+  const s = d.phase2_status_summary || {};
+  const c = d.carbon_summary || {};
+  const order = ['FULLY_ELIGIBLE', 'PARTIALLY_ELIGIBLE', 'NEEDS_REVIEW', 'INELIGIBLE'];
+  order.forEach((key, i) => {
+    const v = s[key] || {};
+    const el = document.getElementById('c' + i);
+    if (el) animateCounter(el, v.count || 0, 1400);
+    const pEl = document.getElementById('p' + i);
+    if (pEl) pEl.textContent = ((v.pct || 0).toFixed(2)) + '%';
+    const fEl = document.getElementById('f' + i);
+    if (fEl) setTimeout(() => fEl.style.width = (v.pct || 0) + '%', 150);
+    const dEl = document.getElementById('dl' + i);
+    if (dEl) dEl.textContent = ((v.pct || 0).toFixed(2)) + '%';
   });
-  // donut legend values
-  const legVals=document.querySelectorAll('.dlval');
-  order.forEach((k,i)=>{if(legVals[i])legVals[i].textContent=((s[k]||{}).pct||0).toFixed(2)+'%';});
-  // donut chart
-  const donut=document.querySelector('.donut');
-  if(donut&&Object.keys(s).length){
-    const el=(s.FULLY_ELIGIBLE||{}).pct||0;
-    const pa=el+((s.PARTIALLY_ELIGIBLE||{}).pct||0);
-    const rv=pa+((s.NEEDS_REVIEW||{}).pct||0);
-    donut.style.background=`conic-gradient(var(--green) 0% ${el}%,var(--amber) ${el}% ${pa}%,var(--blue) ${pa}% ${rv}%,var(--red) ${rv}% 100%)`;
+  const donut = document.getElementById('donut-chart');
+  if (donut && Object.keys(s).length) {
+    const el = (s.FULLY_ELIGIBLE || {}).pct || 0;
+    const pa = el + ((s.PARTIALLY_ELIGIBLE || {}).pct || 0);
+    const rv = pa + ((s.NEEDS_REVIEW || {}).pct || 0);
+    donut.style.background = `conic-gradient(#2D6A4F 0% ${el}%,#D97706 ${el}% ${pa}%,#6B7280 ${pa}% ${rv}%,#DC2626 ${rv}% 100%)`;
   }
-  // carbon sidebar
-  if(c.total_eligible_area_ha){
-    const rows=document.querySelectorAll('.srow .sv');
-    if(rows[0])rows[0].textContent=Math.round(c.total_eligible_area_ha).toLocaleString()+' ha';
-    if(rows[1])rows[1].textContent=(c.avg_adjustment_factor||0).toFixed(4);
-    if(rows[2])rows[2].textContent=(c.plots_needing_review||0).toLocaleString();
+  const total = Object.values(s).reduce((a, v) => a + (v.count || 0), 0);
+  const dt = document.getElementById('donut-total');
+  if (dt) dt.textContent = total.toLocaleString();
+  if (c.total_eligible_area_ha) {
+    const ea = document.getElementById('s-elig-area');
+    if (ea) ea.textContent = Math.round(c.total_eligible_area_ha).toLocaleString() + ' ha';
+    const af = document.getElementById('s-adj-factor');
+    if (af) af.textContent = (c.avg_adjustment_factor || 0).toFixed(4);
+    const rv2 = document.getElementById('s-review');
+    if (rv2) rv2.textContent = (c.plots_needing_review || 0).toLocaleString();
+    const st = document.getElementById('s-total');
+    if (st) st.textContent = total.toLocaleString();
+    const la = document.getElementById('leg-area');
+    if (la) la.textContent = 'Net Eligible Area: ' + Math.round(c.total_eligible_area_ha).toLocaleString() + ' ha';
   }
-  // run id + timestamp chips
-  if(d.run_id){
-    const chip=document.querySelector('.chip.run');
-    if(chip)chip.innerHTML='<em>RUN</em>'+d.run_id;
-    const ri=document.querySelector('.runinfo');
-    if(ri&&d.timestamp)ri.innerHTML='Last run <strong>'+(d.timestamp||'').replace('T',' ').slice(0,16)+' UTC</strong>';
+  if (d.run_id) {
+    const chip = document.getElementById('chip-run');
+    if (chip) chip.textContent = d.run_id;
+    const ri = document.getElementById('run-info');
+    if (ri && d.timestamp) ri.innerHTML = 'Last run <strong>' + (d.timestamp || '').replace('T', ' ').slice(0, 16) + ' UTC</strong>';
   }
 }
 
-async function loadThresholds(){
-  try{
-    const r=await fetch('/api/config/thresholds');
-    if(!r.ok)return;
-    const d=await r.json();
-    const map={
-      's-ov':'overlap_area_pct','s-cd':'centroid_distance_m','s-sl':'sliver_area_ha',
-      's-fa':'cdm_min_area_ha','s-cc':'cdm_canopy_pct','s-wa':'min_area_ha',
-      's-jrc':'jrc_occurrence_threshold','s-rb':'roads_buffer_m','s-rw':'railways_buffer_m',
-      's-rv':'review_threshold_pct','s-pt':'partial_threshold_pct',
+async function loadThresholds() {
+  try {
+    const r = await fetch('/api/config/thresholds');
+    if (!r.ok) return;
+    const d = await r.json();
+    const map = {
+      's-ov': 'overlap_area_pct', 's-cd': 'centroid_distance_m', 's-sl': 'sliver_area_ha',
+      's-fa': 'cdm_min_area_ha', 's-cc': 'cdm_canopy_pct', 's-wa': 'min_area_ha',
+      's-jrc': 'jrc_occurrence_threshold', 's-rb': 'roads_buffer_m', 's-rw': 'railways_buffer_m',
+      's-rv': 'review_threshold_pct', 's-pt': 'partial_threshold_pct',
     };
-    Object.entries(map).forEach(([slid,key])=>{
-      const el=document.getElementById(slid);
-      if(!el||d[key]==null)return;
-      el.value=d[key];
+    Object.entries(map).forEach(([slid, key]) => {
+      const el = document.getElementById(slid);
+      if (!el || d[key] == null) return;
+      el.value = d[key];
       el.dispatchEvent(new Event('input'));
     });
-  }catch(e){addLog('error','Failed to load thresholds: '+e.message);}
+  } catch (e) { addLog('error', 'Failed to load thresholds: ' + e.message); }
 }
 
-let _pollTimer=null;
-async function pollStatus(){
-  try{
-    const r=await fetch('/api/status');
-    const d=await r.json();
-    setStatus(d.status||'idle');
-    const btns=document.querySelectorAll('.btn,.pbtn');
-    if(d.status==='running'){
-      btns.forEach(b=>b.disabled=true);
-      _pollTimer=setTimeout(pollStatus,2000);
-    }else{
-      btns.forEach(b=>b.disabled=false);
+let _pollTimer = null;
+async function pollStatus() {
+  try {
+    const r = await fetch('/api/status');
+    const d = await r.json();
+    setStatus(d.status || 'idle');
+    const btns = document.querySelectorAll('.btn,.pbtn');
+    if (d.status === 'running') {
+      btns.forEach(b => b.disabled = true);
+      _pollTimer = setTimeout(pollStatus, 2000);
+    } else {
+      btns.forEach(b => b.disabled = false);
     }
-  }catch(e){_pollTimer=setTimeout(pollStatus,5000);}
+  } catch (e) { _pollTimer = setTimeout(pollStatus, 5000); }
 }
 
-let _sse=null,_sseRetries=0;
-function connectSSE(){
-  if(_sse){_sse.close();_sse=null;}
-  _sse=new EventSource('/api/logs/stream');
-  _sse.onmessage=(e)=>{
-    const d=JSON.parse(e.data);
-    addLog(d.level||'info',d.msg||'');
-    if(d.done){
-      _sse.close();_sse=null;_sseRetries=0;
+let _sse = null, _sseRetries = 0;
+function connectSSE() {
+  if (_sse) { _sse.close(); _sse = null; }
+  _sse = new EventSource('/api/logs/stream');
+  _sse.onmessage = (e) => {
+    const d = JSON.parse(e.data);
+    addLog(d.level || 'info', d.msg || '');
+    if (d.done) {
+      _sse.close(); _sse = null; _sseRetries = 0;
       setStatus('idle');
-      document.querySelectorAll('.btn,.pbtn').forEach(b=>b.disabled=false);
+      document.querySelectorAll('.btn,.pbtn').forEach(b => b.disabled = false);
       loadResults();
+      // Reload map if it was loaded
+      if (_mapLoaded) {
+        _mapLoaded = false;
+        if (_mapLayer) { _map.removeLayer(_mapLayer); _mapLayer = null; }
+        loadMapPlots();
+      }
     }
   };
-  _sse.onerror=()=>{
-    _sse.close();_sse=null;
-    if(_sseRetries<5){_sseRetries++;setTimeout(connectSSE,3000);}
-    else{setStatus('idle');}
+  _sse.onerror = () => {
+    _sse.close(); _sse = null;
+    if (_sseRetries < 5) { _sseRetries++; setTimeout(connectSSE, 3000); }
+    else { setStatus('idle'); }
   };
 }
 
-async function runPipeline(phase){
-  if(document.getElementById('sdot').className.includes('running'))return;
-  try{
-    const r=await fetch('/api/run/'+phase,{method:'POST'});
-    if(r.status===409){addLog('warning','Pipeline already running');return;}
-    if(!r.ok){addLog('error','Failed to start pipeline: HTTP '+r.status);return;}
-    const d=await r.json();
+async function runPipeline(phase) {
+  if (document.getElementById('sdot').className.includes('running')) return;
+  try {
+    const r = await fetch('/api/run/' + phase, { method: 'POST' });
+    if (r.status === 409) { addLog('warning', 'Pipeline already running'); return; }
+    if (!r.ok) { addLog('error', 'Failed to start pipeline: HTTP ' + r.status); return; }
+    const d = await r.json();
     setStatus('running');
-    addLog('info','Pipeline started: '+phase.toUpperCase()+' · run '+d.run_id);
-    document.querySelectorAll('.btn,.pbtn').forEach(b=>b.disabled=true);
-    _sseRetries=0;
+    addLog('info', 'Pipeline started: ' + phase.toUpperCase() + ' · run ' + d.run_id);
+    document.querySelectorAll('.btn,.pbtn').forEach(b => b.disabled = true);
+    _sseRetries = 0;
     connectSSE();
-    if(_pollTimer)clearTimeout(_pollTimer);
+    if (_pollTimer) clearTimeout(_pollTimer);
     pollStatus();
-  }catch(e){addLog('error','Pipeline error: '+e.message);}
+  } catch (e) { addLog('error', 'Pipeline error: ' + e.message); }
 }
 
-async function applyThresholds(){
-  const payload={};
-  const keyMap={
-    's-ov':'overlap_area_pct','s-cd':'centroid_distance_m','s-sl':'sliver_area_ha',
-    's-fa':'cdm_min_area_ha','s-cc':'cdm_canopy_pct','s-wa':'min_area_ha',
-    's-jrc':'jrc_occurrence_threshold','s-rb':'roads_buffer_m','s-rw':'railways_buffer_m',
-    's-rv':'review_threshold_pct','s-pt':'partial_threshold_pct',
+async function applyThresholds() {
+  const payload = {};
+  const keyMap = {
+    's-ov': 'overlap_area_pct', 's-cd': 'centroid_distance_m', 's-sl': 'sliver_area_ha',
+    's-fa': 'cdm_min_area_ha', 's-cc': 'cdm_canopy_pct', 's-wa': 'min_area_ha',
+    's-jrc': 'jrc_occurrence_threshold', 's-rb': 'roads_buffer_m', 's-rw': 'railways_buffer_m',
+    's-rv': 'review_threshold_pct', 's-pt': 'partial_threshold_pct',
   };
-  document.querySelectorAll('.th-slider').forEach(s=>{
-    const key=keyMap[s.id];
-    if(key)payload[key]=parseFloat(s.value);
+  document.querySelectorAll('.th-slider').forEach(s => {
+    const key = keyMap[s.id];
+    if (key) payload[key] = parseFloat(s.value);
   });
-  addLog('info','Updating thresholds...');
-  try{
-    const r=await fetch('/api/config/thresholds',{
-      method:'PATCH',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify(payload),
+  addLog('info', 'Updating thresholds...');
+  try {
+    const r = await fetch('/api/config/thresholds', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
     });
-    if(!r.ok){addLog('error','Failed to update thresholds: HTTP '+r.status);return;}
-    const d=await r.json();
-    addLog('success','Updated: '+d.updated.join(', '));
-    addLog('info','Triggering Phase 2 rerun...');
+    if (!r.ok) { addLog('error', 'Failed to update thresholds: HTTP ' + r.status); return; }
+    const d = await r.json();
+    addLog('success', 'Updated: ' + d.updated.join(', '));
+    addLog('info', 'Triggering Phase 2 rerun...');
     runPipeline('phase2');
-  }catch(e){addLog('error','Threshold update error: '+e.message);}
+  } catch (e) { addLog('error', 'Threshold update error: ' + e.message); }
+}
+
+// ── DOWNLOAD DROPDOWN ────────────────────────────────────────────────────────
+function toggleDownloadMenu(ev) {
+  ev.stopPropagation();
+  document.getElementById('dl-menu').classList.toggle('open');
+}
+document.addEventListener('click', () => {
+  const m = document.getElementById('dl-menu');
+  if (m) m.classList.remove('open');
+});
+function dlGo(url) {
+  document.getElementById('dl-menu').classList.remove('open');
+  window.location.href = url;
+}
+async function dlPhase2() {
+  document.getElementById('dl-menu').classList.remove('open');
+  try {
+    const r = await fetch('/api/download/phase2-report');
+    if (r.status === 404) { addLog('warning', 'Phase 2 report not yet available'); return; }
+    if (!r.ok) { addLog('error', 'Phase 2 download failed: HTTP ' + r.status); return; }
+    const blob = await r.blob();
+    const cd = r.headers.get('Content-Disposition') || '';
+    const m = cd.match(/filename=([^;]+)/);
+    const fn = m ? m[1].trim().replace(/"/g, '') : 'phase2_results.xlsx';
+    const u = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = u; a.download = fn; a.click();
+    URL.revokeObjectURL(u);
+  } catch (e) { addLog('error', 'Phase 2 download error: ' + e.message); }
+}
+
+// ── KML UPLOAD OVERLAY ───────────────────────────────────────────────────────
+let _kmlLayer = null;
+let _kmlGeojson = null;
+
+async function handleKmlUpload(input) {
+  const f = input.files[0];
+  if (!f) return;
+  input.value = '';  // allow re-uploading the same filename
+  addLog('info', 'Uploading KML: ' + f.name);
+  const fd = new FormData();
+  fd.append('file', f);
+  try {
+    const r = await fetch('/api/upload/kml', { method: 'POST', body: fd });
+    if (!r.ok) {
+      const e = await r.json().catch(() => ({}));
+      addLog('error', 'KML upload failed: ' + (e.detail || ('HTTP ' + r.status)));
+      return;
+    }
+    _kmlGeojson = await r.json();
+    addLog('success', 'KML parsed: ' + (_kmlGeojson.count || 0) + ' plots');
+    switchTab('map', document.querySelector('.nitem[data-tab="map"]'));
+    setTimeout(renderKmlLayer, 200);
+  } catch (e) { addLog('error', 'KML upload error: ' + e.message); }
+}
+
+function renderKmlLayer() {
+  if (!_map || !_kmlGeojson) return;
+  if (_kmlLayer) { _map.removeLayer(_kmlLayer); _kmlLayer = null; }
+  _kmlLayer = L.geoJSON(_kmlGeojson, {
+    style: { color: '#1D4ED8', weight: 2, fillColor: '#3B82F6', fillOpacity: 0.35 },
+    pointToLayer: (f, latlng) => L.circleMarker(latlng, {
+      radius: 5, color: '#1D4ED8', fillColor: '#3B82F6', fillOpacity: 0.7, weight: 1,
+    }),
+    onEachFeature: (f, layer) => {
+      const p = f.properties || {};
+      const nm = p.Name || p.name || p.plot_id || 'KML feature';
+      layer.bindPopup('<strong>' + escHtml(String(nm)) +
+        '</strong><br><span style="color:#1D4ED8">Uploaded KML layer</span>');
+    },
+  }).addTo(_map);
+  try { _map.fitBounds(_kmlLayer.getBounds(), { padding: [30, 30] }); } catch (_) {}
+  const b = document.getElementById('kml-badge');
+  b.classList.add('show');
+  document.getElementById('kml-badge-count').textContent = (_kmlGeojson.count || 0).toLocaleString();
+}
+
+function clearKmlLayer() {
+  if (_kmlLayer && _map) _map.removeLayer(_kmlLayer);
+  _kmlLayer = null;
+  _kmlGeojson = null;
+  document.getElementById('kml-badge').classList.remove('show');
+  addLog('info', 'KML overlay cleared');
+}
+
+// ── PHASE 1 QC SUMMARY ───────────────────────────────────────────────────────
+async function loadPhase1Summary() {
+  try {
+    const r = await fetch('/api/phase1/summary');
+    if (!r.ok) return;
+    const d = await r.json();
+    const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+    set('p1-pass', (d.pass || 0).toLocaleString());
+    set('p1-pass-pct', (d.pass_pct || 0).toFixed(2) + '%');
+    set('p1-review', (d.needs_review || 0).toLocaleString());
+    set('p1-review-pct', (d.needs_review_pct || 0).toFixed(2) + '%');
+    set('p1-special', (d.special_chars || 0).toLocaleString());
+    set('p1-total', (d.total || 0).toLocaleString());
+    const body = document.getElementById('p1-breakdown-body');
+    if (body) {
+      if (!d.breakdown || !d.breakdown.length) {
+        body.innerHTML = '<tr><td colspan="3" style="color:var(--t-muted)">No issues found</td></tr>';
+      } else {
+        body.innerHTML = d.breakdown.map(b =>
+          '<tr><td><span class="lname">' + escHtml(b.type) + '</span></td>' +
+          '<td><span class="lcount">' + b.count.toLocaleString() + '</span></td>' +
+          '<td><span class="lsrc">' + b.pct.toFixed(2) + '%</span></td></tr>'
+        ).join('');
+      }
+    }
+  } catch (e) { /* silent — Phase 1 may not have run yet */ }
 }
 
 // ── INIT ─────────────────────────────────────────────────────────────────────
-
-window.addEventListener('DOMContentLoaded',()=>{
-  setTimeout(()=>{
-    document.querySelectorAll('.sc-fill[data-w]').forEach(e=>e.style.width=e.dataset.w+'%');
-    document.querySelectorAll('.phfill[data-w]').forEach(e=>{
-      e.style.width=Math.min(parseFloat(e.dataset.w),100)+'%';
+window.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => {
+    document.querySelectorAll('.sc-fill[data-w]').forEach(e => e.style.width = e.dataset.w + '%');
+    document.querySelectorAll('.phfill[data-w]').forEach(e => {
+      e.style.width = Math.min(parseFloat(e.dataset.w), 100) + '%';
     });
-  },150);
+  }, 150);
   initSliders();
   loadResults();
+  loadPhase1Summary();
   loadThresholds();
   pollStatus();
+  // Try to load plot count for header chip
+  fetch('/api/plots/count').then(r => r.json()).then(d => {
+    if (d.total) {
+      document.getElementById('chip-plots').textContent = d.total.toLocaleString();
+      document.getElementById('s-total').textContent = d.total.toLocaleString();
+      updateLegend(d.status_counts || {}, d.total);
+    }
+  }).catch(() => {});
 });
 </script>
 </body>

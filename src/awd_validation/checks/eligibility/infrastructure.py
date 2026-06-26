@@ -21,6 +21,8 @@ import geopandas as gpd
 from loguru import logger
 from shapely.validation import make_valid
 
+from awd_validation.utils.config import compute_working_epsg
+
 
 class InfrastructureChecker:
     """
@@ -31,9 +33,6 @@ class InfrastructureChecker:
             2C_infra_report_{run_id}.json            (outputs)
             2C_infra_report_{run_id}.csv             (outputs)
     """
-
-    WORKING_EPSG = 32643
-    OUTPUT_EPSG = 4326
 
     # Infrastructure types with buffer distances
     INFRA_TYPES = {
@@ -47,6 +46,9 @@ class InfrastructureChecker:
         self.config = config
         self.interim_dir = Path(config.input["interim_dir"])
         self.outputs_dir = Path(config.input["outputs_dir"])
+        self.output_epsg = config.crs.get("output_epsg", 4326)
+        self.fallback_epsg = config.crs.get("fallback_working_epsg", 32644)
+        self.working_epsg: int = self.fallback_epsg  # set dynamically in _load_input
         self.phase2_cfg = config.get("phase2", default={})
         self.infra_cfg = self.phase2_cfg.get("infrastructure", {})
         self.enabled = self.infra_cfg.get("enabled", False)
@@ -117,10 +119,13 @@ class InfrastructureChecker:
         latest = files[-1]
         logger.info(f"Loading Phase 2B output: {Path(latest).name}")
         gdf = gpd.read_file(latest)
-        if gdf.crs.to_epsg() != self.WORKING_EPSG:
-            gdf = gdf.to_crs(epsg=self.WORKING_EPSG)
+        self.working_epsg = compute_working_epsg(gdf, self.fallback_epsg)
+        if gdf.crs is None or gdf.crs.to_epsg() != self.working_epsg:
+            gdf = gdf.to_crs(epsg=self.working_epsg)
+        logger.info(f"Loaded {len(gdf):,} plots | working CRS: EPSG:{self.working_epsg}")
         report["input_file"] = latest
         report["total_plots"] = len(gdf)
+        report["working_epsg"] = self.working_epsg
         return gdf
 
     def _load_infra_layer(
@@ -136,8 +141,8 @@ class InfrastructureChecker:
             return None
         logger.info(f"Loading {infra_type} layer: {path.name}")
         layer = gpd.read_file(path)
-        if layer.crs.to_epsg() != self.WORKING_EPSG:
-            layer = layer.to_crs(epsg=self.WORKING_EPSG)
+        if layer.crs.to_epsg() != self.working_epsg:
+            layer = layer.to_crs(epsg=self.working_epsg)
         invalid = (~layer.geometry.is_valid).sum()
         if invalid > 0:
             layer["geometry"] = layer.geometry.apply(make_valid)
@@ -228,7 +233,7 @@ class InfrastructureChecker:
     def _write_output(self, gdf: gpd.GeoDataFrame, run_id: str) -> None:
         self.interim_dir.mkdir(parents=True, exist_ok=True)
         path = self.interim_dir / f"2C_plots_infra_checked_{run_id}.gpkg"
-        gdf.to_crs(epsg=self.OUTPUT_EPSG).to_file(
+        gdf.to_crs(epsg=self.output_epsg).to_file(
             path, driver="GPKG", layer="plots_infra_checked"
         )
         logger.info(f"Output written: {path.name}")

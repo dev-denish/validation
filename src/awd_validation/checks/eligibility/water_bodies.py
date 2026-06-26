@@ -22,6 +22,8 @@ from loguru import logger
 from shapely.ops import unary_union
 from shapely.validation import make_valid
 
+from awd_validation.utils.config import compute_working_epsg
+
 
 def _derive_jrc_status(polygons_count: int, raster_stats: Optional[dict]) -> str:
     """Map raster stats + polygon count to a human-readable JRC status string."""
@@ -45,20 +47,23 @@ class WaterBodyChecker:
             2B_water_report_{run_id}.csv            (outputs)
     """
 
-    WORKING_EPSG = 32643
-    OUTPUT_EPSG = 4326
-
     def __init__(self, config) -> None:
         self.config = config
         self.interim_dir = Path(config.input["interim_dir"])
         self.outputs_dir = Path(config.input["outputs_dir"])
+        self.output_epsg = config.crs.get("output_epsg", 4326)
+        self.fallback_epsg = config.crs.get("fallback_working_epsg", 32644)
         self.phase2_cfg = config.get("phase2", default={})
         self.water_cfg = self.phase2_cfg.get("water_bodies", {})
         self.enabled = self.water_cfg.get("enabled", False)
-        self.layer_path = self.water_cfg.get("layer_path")
-        self.min_area_ha = self.water_cfg.get("min_area_ha", 0.5)
+        # OSM water: reference-only, never used in eligibility calculation
+        self.osm_cfg = self.water_cfg.get("osm_water", {})
+        self.osm_active = self.osm_cfg.get("active", False)
+        self.min_area_ha = self.water_cfg.get("minimum_water_area_ha",
+                           self.water_cfg.get("min_area_ha", 0.5))
         self.jrc_layer_path = self.water_cfg.get("jrc_layer_path")
         self.jrc_enabled = self.water_cfg.get("jrc_enabled", False)
+        self.working_epsg: int = self.fallback_epsg  # set dynamically in _load_input
 
     def run(self, run_id: str) -> Tuple[gpd.GeoDataFrame, dict]:
         logger.info("=" * 60)
@@ -71,6 +76,7 @@ class WaterBodyChecker:
             "timestamp": datetime.utcnow().isoformat(),
             "enabled": self.enabled,
             "min_area_ha": self.min_area_ha,
+            "osm_water_used_in_eligibility": False,
             "checks": {},
         }
 
@@ -84,13 +90,13 @@ class WaterBodyChecker:
                 "reason": (
                     "BLOCKED — awaiting water bodies / wetlands GIS layer "
                     "from Jibotosh. Set phase2.water_bodies.enabled=true "
-                    "and phase2.water_bodies.layer_path in settings.yaml."
+                    "in settings.yaml."
                 ),
             }
         else:
-            water_osm = self._load_water_layer(report)
+            # OSM layer is reference-only; only JRC is used in eligibility
             water_jrc = self._load_jrc_layer(report)
-            gdf = self._check_water_overlap(gdf, water_osm, water_jrc, report)
+            gdf = self._check_water_overlap(gdf, water_jrc, report)
 
         self._write_output(gdf, run_id)
         self._write_json_report(report, run_id)
@@ -109,44 +115,15 @@ class WaterBodyChecker:
         latest = files[-1]
         logger.info(f"Loading Phase 2A output: {Path(latest).name}")
         gdf = gpd.read_file(latest)
-        if gdf.crs.to_epsg() != self.WORKING_EPSG:
-            gdf = gdf.to_crs(epsg=self.WORKING_EPSG)
-        logger.info(f"Loaded {len(gdf):,} plots")
+        # Compute UTM zone dynamically from data centroid
+        self.working_epsg = compute_working_epsg(gdf, self.fallback_epsg)
+        if gdf.crs is None or gdf.crs.to_epsg() != self.working_epsg:
+            gdf = gdf.to_crs(epsg=self.working_epsg)
+        logger.info(f"Loaded {len(gdf):,} plots | working CRS: EPSG:{self.working_epsg}")
         report["input_file"] = latest
         report["total_plots"] = len(gdf)
+        report["working_epsg"] = self.working_epsg
         return gdf
-
-    def _load_water_layer(self, report: dict) -> gpd.GeoDataFrame:
-        if not self.layer_path:
-            raise ValueError(
-                "phase2.water_bodies.layer_path is not set in settings.yaml."
-            )
-        layer_path = Path(self.layer_path)
-        if not layer_path.exists():
-            raise FileNotFoundError(f"Water body layer not found: {layer_path}")
-        logger.info(f"Loading water body layer: {layer_path.name}")
-        water_gdf = gpd.read_file(layer_path)
-        if water_gdf.crs.to_epsg() != self.WORKING_EPSG:
-            water_gdf = water_gdf.to_crs(epsg=self.WORKING_EPSG)
-        invalid = (~water_gdf.geometry.is_valid).sum()
-        if invalid > 0:
-            water_gdf["geometry"] = water_gdf.geometry.apply(make_valid)
-        # Filter: only permanent water bodies > min_area_ha
-        water_gdf["layer_area_ha"] = water_gdf.geometry.area / 10000
-        before = len(water_gdf)
-        water_gdf = water_gdf[
-            water_gdf["layer_area_ha"] >= self.min_area_ha
-        ].copy()
-        logger.info(
-            f"Water layer: {len(water_gdf):,} polygons "
-            f"(filtered {before - len(water_gdf)} below {self.min_area_ha} ha)"
-        )
-        report["water_layer"] = {
-            "path": str(layer_path),
-            "polygons_after_filter": len(water_gdf),
-            "min_area_filter_ha": self.min_area_ha,
-        }
-        return water_gdf
 
     def _load_jrc_layer(self, report: dict) -> Optional[gpd.GeoDataFrame]:
         if not self.jrc_enabled or not self.jrc_layer_path:
@@ -154,14 +131,14 @@ class WaterBodyChecker:
         jrc_path = Path(self.jrc_layer_path)
         if not jrc_path.exists():
             logger.warning(
-                f"JRC water layer not found: {jrc_path} — skipping JRC, OSM-only."
+                f"JRC water layer not found: {jrc_path} — no water exclusion layer available."
             )
             report["jrc_layer"] = {"status": "NOT_FOUND", "path": str(jrc_path)}
             return None
         logger.info(f"Loading JRC permanent water layer: {jrc_path.name}")
         jrc_gdf = gpd.read_file(jrc_path)
-        if len(jrc_gdf) > 0 and jrc_gdf.crs.to_epsg() != self.WORKING_EPSG:
-            jrc_gdf = jrc_gdf.to_crs(epsg=self.WORKING_EPSG)
+        if len(jrc_gdf) > 0 and jrc_gdf.crs.to_epsg() != self.working_epsg:
+            jrc_gdf = jrc_gdf.to_crs(epsg=self.working_epsg)
         if len(jrc_gdf) > 0:
             invalid = (~jrc_gdf.geometry.is_valid).sum()
             if invalid > 0:
@@ -213,91 +190,71 @@ class WaterBodyChecker:
     def _check_water_overlap(
         self,
         plots: gpd.GeoDataFrame,
-        water_osm: Optional[gpd.GeoDataFrame],
         water_jrc: Optional[gpd.GeoDataFrame],
         report: dict,
     ) -> gpd.GeoDataFrame:
-        logger.info("Calculating water body overlap (OSM + JRC union) ...")
+        """Compute water overlap using JRC permanent water layer only.
+
+        OSM water (water_bodies.gpkg) is a reference layer only and must NOT
+        contribute to eligibility calculations — OSM does not distinguish
+        seasonal from permanent water features (VCS v5.0 / VM0051).
+        """
+        logger.info("Calculating water body overlap (JRC permanent water only) ...")
         plots = plots.copy()
         plots["chk_water_overlap"] = False
         plots["water_overlap_ha"] = 0.0
         plots["water_overlap_pct"] = 0.0
         plots["water_overlap_source"] = "None"
 
-        # Build combined layer with source tag
-        layer_gdfs = []
-        if water_osm is not None and len(water_osm) > 0:
-            osm = water_osm[["geometry"]].copy()
-            osm["_src"] = "OSM"
-            layer_gdfs.append(osm)
-        if water_jrc is not None and len(water_jrc) > 0:
-            jrc = water_jrc[["geometry"]].copy()
-            jrc["_src"] = "JRC"
-            layer_gdfs.append(jrc)
-
-        if not layer_gdfs:
-            logger.info("No water polygons from either source — all plots PASS")
+        if water_jrc is None or len(water_jrc) == 0:
+            logger.info("No JRC water polygons available — all plots PASS water check")
             plots["phase_2b_status"] = "PASS"
             report["checks"]["water_overlap"] = {
                 "status": "PASS",
                 "plots_with_overlap": 0,
                 "total_overlap_ha": 0.0,
-                "source_breakdown": {"OSM": 0, "JRC": 0, "Both": 0},
+                "source": "JRC_GSW",
+                "osm_excluded": True,
             }
             return plots
 
-        combined = gpd.GeoDataFrame(
-            pd.concat(layer_gdfs, ignore_index=True), crs=layer_gdfs[0].crs
-        )
+        jrc = water_jrc[["geometry"]].copy()
+        jrc["_src"] = "JRC"
 
         joined = gpd.sjoin(
             plots[["plot_id", "area_ha", "geometry"]],
-            combined[["_src", "geometry"]],
+            jrc[["_src", "geometry"]],
             how="inner",
             predicate="intersects",
         )
 
         if len(joined) == 0:
-            logger.info("No water body overlaps found")
+            logger.info("No JRC water overlaps found")
             plots["phase_2b_status"] = "PASS"
             report["checks"]["water_overlap"] = {
                 "status": "PASS",
                 "plots_with_overlap": 0,
                 "total_overlap_ha": 0.0,
-                "source_breakdown": {"OSM": 0, "JRC": 0, "Both": 0},
+                "source": "JRC_GSW",
+                "osm_excluded": True,
             }
             return plots
-
-        source_counts: dict[str, int] = {"OSM": 0, "JRC": 0, "Both": 0}
 
         for plot_id, group in joined.groupby("plot_id"):
             plot_geom = plots.loc[plots["plot_id"] == plot_id, "geometry"].values[0]
             intersection_geoms = []
-            sources_hit: set[str] = set()
 
             for idx in group["index_right"]:
-                water_geom = combined.loc[idx, "geometry"]
-                src = combined.loc[idx, "_src"]
+                water_geom = jrc.loc[idx, "geometry"]
                 inter = plot_geom.intersection(water_geom)
                 if not inter.is_empty and inter.area > 0:
                     intersection_geoms.append(inter)
-                    sources_hit.add(src)
 
             if not intersection_geoms:
                 continue
 
-            # Union avoids double-counting where OSM and JRC polygons coincide
             union_geom = unary_union(intersection_geoms)
             overlap_ha = union_geom.area / 10_000
-
-            if "OSM" in sources_hit and "JRC" in sources_hit:
-                source = "Both"
-            elif "OSM" in sources_hit:
-                source = "OSM"
-            else:
-                source = "JRC"
-
-            source_counts[source] += 1
 
             mask = plots["plot_id"] == plot_id
             plot_area_ha = plots.loc[mask, "area_ha"].values[0]
@@ -305,17 +262,12 @@ class WaterBodyChecker:
             plots.loc[mask, "water_overlap_ha"] = round(overlap_ha, 6)
             plots.loc[mask, "water_overlap_pct"] = round(pct, 2)
             plots.loc[mask, "chk_water_overlap"] = True
-            plots.loc[mask, "water_overlap_source"] = source
+            plots.loc[mask, "water_overlap_source"] = "JRC"
 
         plots_with_overlap = int(plots["chk_water_overlap"].sum())
         total_overlap_ha = round(float(plots["water_overlap_ha"].sum()), 4)
         logger.info(
-            f"Water overlap — {plots_with_overlap:,} plots | {total_overlap_ha:,} ha total"
-        )
-        logger.info(
-            f"  OSM-only: {source_counts['OSM']:,} | "
-            f"JRC-only: {source_counts['JRC']:,} | "
-            f"Both: {source_counts['Both']:,}"
+            f"JRC water overlap — {plots_with_overlap:,} plots | {total_overlap_ha:,} ha total"
         )
 
         plots["phase_2b_status"] = plots["chk_water_overlap"].apply(
@@ -325,7 +277,8 @@ class WaterBodyChecker:
             "status": "PASS" if plots_with_overlap == 0 else "FAIL",
             "plots_with_overlap": plots_with_overlap,
             "total_overlap_ha": total_overlap_ha,
-            "source_breakdown": source_counts,
+            "source": "JRC_GSW",
+            "osm_excluded": True,
         }
         return plots
 
@@ -344,7 +297,7 @@ class WaterBodyChecker:
     def _write_output(self, gdf: gpd.GeoDataFrame, run_id: str) -> None:
         self.interim_dir.mkdir(parents=True, exist_ok=True)
         path = self.interim_dir / f"2B_plots_water_checked_{run_id}.gpkg"
-        gdf.to_crs(epsg=self.OUTPUT_EPSG).to_file(
+        gdf.to_crs(epsg=self.output_epsg).to_file(
             path, driver="GPKG", layer="plots_water_checked"
         )
         logger.info(f"Output written: {path.name}")

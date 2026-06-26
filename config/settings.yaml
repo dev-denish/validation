@@ -1,34 +1,49 @@
 project:
-  name: "AWD Farm Plot Validation"
-  version: "1.0.0"
-  standard: "VCS v5.0"
+  name: AWD Farm Plot Validation
+  version: 1.0.0
+  standard: VCS v5.0
 
 input:
-  filename: "farms_kmlFile.kml"
-  layer: "Layer #0"
-  raw_dir: "/app/data/raw"
-  interim_dir: "/app/data/interim"
-  processed_dir: "/app/data/processed"
-  outputs_dir: "/app/data/outputs"
+  filename: farms_kmlFile.kml
+  layer: 'Layer #0'
+  raw_dir: /app/data/raw
+  interim_dir: /app/data/interim
+  processed_dir: /app/data/processed
+  outputs_dir: /app/data/outputs
 
 crs:
   input_epsg: 4326
-  working_epsg: 32643
+  # working_epsg is computed dynamically from plot centroid using get_utm_epsg()
+  # Fallback used only if no valid geometries exist at load time.
+  fallback_working_epsg: 32644  # UTM Zone 44N — correct for Maharashtra AWD area (~80°E)
   output_epsg: 4326
 
 schema:
-  unique_id_field: "Name"
-  description_field: "Description"
-  id_pattern: "^[0-9]+-[0-9]+-[A-Z]+-[0-9]+$"
-  alternate_id_pattern: "^FAM[A-Z0-9]+$"
+  unique_id_field: Name
+  description_field: Description
+  id_pattern: ^[0-9]+-[0-9]+-[A-Z]+-[0-9]+$
+  alternate_id_pattern: ^FAM[A-Z0-9]+$
+  allowed_id_chars: A-Za-z0-9-
+  # Regex for characters NOT allowed in a plot ID
+  special_char_pattern: '[^A-Za-z0-9\-]'
 
 thresholds:
-  # min/max area thresholds removed — awaiting AWD methodology
-  # confirmation from Jibotosh on minimum plot size
-  # Will be added back once confirmed
-  overlap_area_pct: 0.01        # >1% = real overlap, <1% = digitization noise
-  sliver_area_ha: 0.001         # 10 sqm — geometry artifact threshold
-  centroid_distance_m: 2.0      # spatial duplicate detection radius
+  overlap_area_pct: 0.001
+  # Minimum overlap fraction to flag as genuine boundary overlap.
+  # Below = GPS noise (device accuracy ±3–5 m). Above = real overlap.
+  # Stored as fraction: 0.001 = 0.1% of smaller plot area.
+
+  overlap_minor_fraction: 0.10
+  # Overlap <10% of smaller plot area = MINOR severity.
+
+  overlap_significant_fraction: 0.50
+  # Overlap 10–50% = SIGNIFICANT severity. Above 50% = MAJOR.
+
+  sliver_area_ha: 0.0002
+  # Plots below this area flagged as degenerate slivers.
+
+  centroid_distance_m: 0.5
+  # Two plots with centroids within this distance = locational duplicate.
 
 checks:
   geometry_validity: true
@@ -37,68 +52,146 @@ checks:
   spatial_overlap: true
   locational_duplicate: true
   unique_id_duplicate: true
-  area_threshold: false         # disabled — awaiting methodology confirmation
+  area_threshold: false
+  # area_threshold disabled — awaiting minimum plot size confirmation from Jibotosh.
 
 unique_id:
-  field_name: "Name"
-  primary_pattern: "^[0-9]+-[0-9]+-[A-Z]+-[0-9]+$"
-  alternate_pattern: "^FAM[A-Z0-9]+$"
+  field_name: Name
+  primary_pattern: ^[0-9]+-[0-9]+-[A-Z]+-[0-9]+$
+  alternate_pattern: ^FAM[A-Z0-9]+$
 
 logging:
-  level: "INFO"
-  log_dir: "/app/logs"
+  level: INFO
+  log_dir: /app/logs
 
 database:
-  host: "postgis"
+  host: postgis
   port: 5432
-  name: "awd_validation"
-  user: "awd_user"
-  password: "awd_secure_pass"
-  schema: "awd"
-# ─────────────────────────────────────────────────────────────────────────────
-# PHASE 2 — ELIGIBILITY CROSS-CHECK CONFIGURATION
-# Add this block to the bottom of config/settings.yaml
-# ─────────────────────────────────────────────────────────────────────────────
+  name: awd_validation
+  user: awd_user
+  password: awd_secure_pass
+  schema: awd
 
 phase2:
-  # Input: reads from Phase 1F valid_plots output
-  input_source: "phase1f_valid"
+  input_source: phase1f_valid
 
   forest:
     enabled: true
-    definition_source: "maharashtra_fsi"
-    layer_path: "/app/data/raw/forest_maharashtra_rfa.gpkg"
-    attribute_field: "st_name"
-    hansen_layer_path: "/app/data/raw/forest_hansen_canopy_2023.gpkg"
+    definition_source: maharashtra_fsi
+    layer_path: /app/data/raw/forest_maharashtra_rfa.gpkg
+    attribute_field: st_name
+    hansen_layer_path: /app/data/raw/forest_hansen_canopy_2023.gpkg
     hansen_enabled: true
-    # CDM DNA fallback thresholds (UNFCCC default)
+    canopy_density_threshold_pct: 10
+    # India national forest definition minimum canopy cover.
+    # Source: MoEFCC Forest Conservation Act / CDM DNA fallback.
+    minimum_tree_height_m: 5
+    # CDM DNA minimum tree height for forest classification.
+    minimum_forest_area_ha: 1.0
+    # Minimum contiguous area for forest classification (CDM default: 0.5 ha;
+    # FSI Maharashtra practice: 1.0 ha). Jibotosh to confirm.
+    # Legacy config aliases preserved for backward compatibility:
     cdm_canopy_pct: 10
     cdm_height_m: 5
     cdm_min_area_ha: 1.0
 
   water_bodies:
     enabled: true
-    layer_path: "/app/data/raw/water_bodies.gpkg"
-    min_area_ha: 0.5                  # Only permanent water bodies > 0.5 ha
-    jrc_layer_path: "/app/data/raw/water_jrc_permanent.gpkg"
+    jrc_layer_path: /app/data/raw/water_jrc_permanent.gpkg
     jrc_enabled: true
-    jrc_occurrence_threshold: 75      # JRC pixel >= 75% occurrence = permanent
+    jrc_occurrence_threshold_pct: 75
+    # JRC GSW pixel classified as permanent water if water was present
+    # in >75% of observations. Stored as integer percentage.
+    minimum_water_area_ha: 0.5
+    # Water features smaller than this ignored as noise / ephemeral.
+    # Legacy key aliases:
+    jrc_occurrence_threshold: 75
+    min_area_ha: 0.5
+    osm_water:
+      active: false
+      used_in_eligibility: false
+      layer_path: /app/data/raw/water_bodies.gpkg
+      source: OSM_natural_water
+      note: >
+        Reference layer only. Seasonal and permanent water features are not
+        distinguished in OSM — the same polygon may represent a seasonal
+        tank that is present for only 3 months. Not suitable for permanent
+        water body exclusion under VCS v5.0 / VM0051. JRC GSW used instead.
 
   infrastructure:
     enabled: true
-    roads_layer_path: "/app/data/raw/roads.gpkg"
-    roads_buffer_m: 5                 # 5m buffer around road centrelines
-    railways_layer_path: "/app/data/raw/railways.gpkg"
-    railways_buffer_m: 10             # 10m buffer around railway centrelines
-    settlements_layer_path: "/app/data/raw/settlements.gpkg"
-    settlements_buffer_m: 0           # Direct intersection, no buffer
-    buildings_layer_path: "/app/data/raw/buildings_merged.gpkg"
-    buildings_buffer_m: 0             # Direct intersection, no buffer
+    roads_layer_path: /app/data/raw/roads.gpkg
+    roads_buffer_m: 5
+    # Buffer applied to OSM road centrelines to approximate road width.
+    # Default 5m = approximate half-width of a village road.
+    railways_layer_path: /app/data/raw/railways.gpkg
+    railways_buffer_m: 10
+    # Buffer applied to OSM railway centrelines to cover track + right-of-way.
+    settlements_layer_path: /app/data/raw/settlements.gpkg
+    settlements_buffer_m: 0
+    # Settlements intersected directly — polygon already covers built-up area.
+    buildings_layer_path: /app/data/raw/buildings_merged.gpkg
+    buildings_buffer_m: 0
+    pump_house_max_area_m2: 20
+    # Buildings smaller than this inside AWD plots treated as pump houses
+    # and classified as eligible agricultural infrastructure. Confirmed by Jibotosh.
+    minimum_building_area_m2: 10
+    # Buildings smaller than this ignored as digitisation noise.
 
   eligibility:
-    # PENDING — awaiting Jibotosh confirmation on minimum % to retain a plot
-    partial_threshold_pct: null
-    # Flag plots losing more than 25% of area for manual review
+    partial_threshold_pct: 0
+    partial_threshold_min_pct: 1
+    # Minimum non-eligible % to classify a plot as PARTIALLY_ELIGIBLE
+    # rather than FULLY_ELIGIBLE. Pending Jibotosh confirmation.
+    partial_threshold_max_pct: 30
+    # Non-eligible % above which a plot should be manually reviewed.
+    # Configurable range — project team makes the final call.
     review_threshold_pct: 75
-    # Carbon adjustment factor precision
+    # Plots retaining <75% of area (losing >25%) flagged for Jibotosh review.
     adjustment_factor_decimals: 4
+    map_sample_size: 3000
+    # Number of plots sampled for the Phase 2E eligibility HTML map.
+    # Reduce if map generation is slow; increase for denser coverage.
+
+phase3:
+  paddy_detection:
+    flooding_lswi_ndvi_min_diff: 0.0
+    # LSWI must exceed NDVI during June–July flooding window.
+    # A plot with water on the field will show LSWI > NDVI.
+
+    vegetative_peak_ndvi_min: 0.4
+    # NDVI must reach this value during August–September growth window.
+
+    harvest_drop_min: 0.3
+    # NDVI must drop by at least this amount between September and November.
+
+    paddy_pct_high_confidence: 75
+    # % of plot pixels passing all phenology rules = HIGH confidence paddy.
+
+    paddy_pct_medium_confidence: 50
+    # % = MEDIUM confidence paddy.
+
+    paddy_pct_low_confidence: 30
+    # % = LOW confidence paddy.
+
+    min_paddy_years_required: 2
+    # Minimum number of baseline years (2015, 2020, 2025) showing paddy
+    # for a plot to pass baseline eligibility.
+    # Default: 2 of 3 years. Confirm with Filip when methodology is finalised.
+
+    small_plot_uncertainty_ha: 1.0
+    # Plots smaller than this flagged HIGH uncertainty for 2015 Landsat
+    # 30m classification (sub-pixel accuracy issue).
+
+  gee:
+    cloud_threshold_pct: 20
+    # Maximum cloud cover % for Sentinel-2 image inclusion in composites.
+
+    batch_size: 5000
+    # Number of plots per GEE reduceRegions call.
+    # Reduce to 1000 if GEE memory errors occur.
+
+    export_scale_sentinel2_m: 10
+    export_scale_landsat_m: 30
+    export_crs: "EPSG:4326"
+    export_folder: "AWD_Phase3_Composites"

@@ -26,6 +26,8 @@ from loguru import logger
 from shapely.ops import unary_union
 from shapely.validation import make_valid
 
+from awd_validation.utils.config import compute_working_epsg
+
 
 class NetAreaCalculator:
     """
@@ -36,9 +38,6 @@ class NetAreaCalculator:
             2D_net_area_report_{run_id}.json        (outputs)
             2D_net_area_report_{run_id}.csv         (outputs)
     """
-
-    WORKING_EPSG = 32643
-    OUTPUT_EPSG = 4326
 
     # Non-eligible area columns from Phases 2A/2B/2C
     NON_ELIGIBLE_COLS = [
@@ -54,6 +53,9 @@ class NetAreaCalculator:
         self.config = config
         self.interim_dir = Path(config.input["interim_dir"])
         self.outputs_dir = Path(config.input["outputs_dir"])
+        self.output_epsg = config.crs.get("output_epsg", 4326)
+        self.fallback_epsg = config.crs.get("fallback_working_epsg", 32644)
+        self.working_epsg: int = self.fallback_epsg  # set dynamically in _load_input
         self.phase2_cfg = config.get("phase2", default={})
         self.eligibility_cfg = self.phase2_cfg.get("eligibility", {})
         self.review_threshold_pct = self.eligibility_cfg.get(
@@ -98,11 +100,13 @@ class NetAreaCalculator:
         latest = files[-1]
         logger.info(f"Loading Phase 2C output: {Path(latest).name}")
         gdf = gpd.read_file(latest)
-        if gdf.crs.to_epsg() != self.WORKING_EPSG:
-            gdf = gdf.to_crs(epsg=self.WORKING_EPSG)
-        logger.info(f"Loaded {len(gdf):,} plots")
+        self.working_epsg = compute_working_epsg(gdf, self.fallback_epsg)
+        if gdf.crs is None or gdf.crs.to_epsg() != self.working_epsg:
+            gdf = gdf.to_crs(epsg=self.working_epsg)
+        logger.info(f"Loaded {len(gdf):,} plots | working CRS: EPSG:{self.working_epsg}")
         report["input_file"] = latest
         report["total_plots"] = len(gdf)
+        report["working_epsg"] = self.working_epsg
         return gdf
 
     def _load_exclusion_layers(self) -> dict[str, gpd.GeoDataFrame]:
@@ -124,8 +128,8 @@ class NetAreaCalculator:
                 return None
             if gdf_l.empty:
                 return None
-            if gdf_l.crs and gdf_l.crs.to_epsg() != self.WORKING_EPSG:
-                gdf_l = gdf_l.to_crs(epsg=self.WORKING_EPSG)
+            if gdf_l.crs and gdf_l.crs.to_epsg() != self.working_epsg:
+                gdf_l = gdf_l.to_crs(epsg=self.working_epsg)
             gdf_l["geometry"] = gdf_l.geometry.apply(
                 lambda g: make_valid(g) if g and not g.is_valid else g
             )
@@ -146,9 +150,10 @@ class NetAreaCalculator:
                 rfa = gpd.read_file(rfa_path)
                 if "st_name" in rfa.columns:
                     rfa = rfa[rfa["st_name"] == "MAHARASHTRA"].copy()
-                if rfa.crs and rfa.crs.to_epsg() != self.WORKING_EPSG:
-                    rfa = rfa.to_crs(epsg=self.WORKING_EPSG)
-                min_area = forest_cfg.get("cdm_min_area_ha", 1.0)
+                if rfa.crs and rfa.crs.to_epsg() != self.working_epsg:
+                    rfa = rfa.to_crs(epsg=self.working_epsg)
+                min_area = forest_cfg.get("minimum_forest_area_ha",
+                                          forest_cfg.get("cdm_min_area_ha", 1.0))
                 rfa = rfa[rfa.geometry.area / 10_000 >= min_area]
                 if not rfa.empty:
                     forest_parts.append(rfa[["geometry"]].copy())
@@ -161,14 +166,16 @@ class NetAreaCalculator:
         if forest_parts:
             layers["forest"] = gpd.GeoDataFrame(
                 pd.concat(forest_parts, ignore_index=True),
-                crs=f"EPSG:{self.WORKING_EPSG}",
+                crs=f"EPSG:{self.working_epsg}",
             )
 
-        # Water bodies
+        # Water bodies — JRC only; OSM (water_bodies.gpkg) is reference-only
         water_cfg = cfg.get("water_bodies", {})
         if water_cfg.get("enabled", False):
-            w = _load(water_cfg.get("layer_path", ""),
-                      area_filter_ha=water_cfg.get("min_area_ha", 0.5))
+            jrc_path = water_cfg.get("jrc_layer_path", "")
+            min_ha = water_cfg.get("minimum_water_area_ha",
+                                   water_cfg.get("min_area_ha", 0.5))
+            w = _load(jrc_path, area_filter_ha=min_ha)
             if w is not None:
                 layers["water"] = w
 
@@ -231,7 +238,7 @@ class NetAreaCalculator:
         else:
             all_excl = gpd.GeoDataFrame(
                 pd.concat(list(excl_layers.values()), ignore_index=True),
-                crs=f"EPSG:{self.WORKING_EPSG}",
+                crs=f"EPSG:{self.working_epsg}",
             ).reset_index(drop=True)
 
             plots_idx = gdf[["plot_id", "area_ha", "geometry"]].reset_index(drop=True)
@@ -416,7 +423,7 @@ class NetAreaCalculator:
     def _write_output(self, gdf: gpd.GeoDataFrame, run_id: str) -> None:
         self.interim_dir.mkdir(parents=True, exist_ok=True)
         path = self.interim_dir / f"2D_plots_net_area_{run_id}.gpkg"
-        gdf.to_crs(epsg=self.OUTPUT_EPSG).to_file(
+        gdf.to_crs(epsg=self.output_epsg).to_file(
             path, driver="GPKG", layer="plots_net_area"
         )
         logger.info(f"Output written: {path.name}")

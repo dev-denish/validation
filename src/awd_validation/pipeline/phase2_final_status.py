@@ -22,6 +22,8 @@ import geopandas as gpd
 import pandas as pd
 from loguru import logger
 
+from awd_validation.utils.config import compute_working_epsg
+
 
 class Phase2FinalStatusAssigner:
     """
@@ -38,9 +40,6 @@ class Phase2FinalStatusAssigner:
             2E_phase2_summary_{run_id}.json            (outputs)
     """
 
-    WORKING_EPSG = 32643
-    OUTPUT_EPSG = 4326
-
     FULLY_ELIGIBLE = "FULLY_ELIGIBLE"
     PARTIALLY_ELIGIBLE = "PARTIALLY_ELIGIBLE"
     INELIGIBLE = "INELIGIBLE"
@@ -50,11 +49,15 @@ class Phase2FinalStatusAssigner:
         self.config = config
         self.interim_dir = Path(config.input["interim_dir"])
         self.outputs_dir = Path(config.input["outputs_dir"])
+        self.output_epsg = config.crs.get("output_epsg", 4326)
+        self.fallback_epsg = config.crs.get("fallback_working_epsg", 32644)
+        self.working_epsg: int = self.fallback_epsg  # set dynamically in _load_input
         self.phase2_cfg = config.get("phase2", default={})
         self.eligibility_cfg = self.phase2_cfg.get("eligibility", {})
         self.review_threshold_pct = self.eligibility_cfg.get(
             "review_threshold_pct", 75
         )
+        self.map_sample_size = self.eligibility_cfg.get("map_sample_size", 3000)
 
     def run(self, run_id: str) -> Tuple[gpd.GeoDataFrame, dict]:
         logger.info("=" * 60)
@@ -89,11 +92,13 @@ class Phase2FinalStatusAssigner:
         latest = files[-1]
         logger.info(f"Loading Phase 2D output: {Path(latest).name}")
         gdf = gpd.read_file(latest)
-        if gdf.crs.to_epsg() != self.WORKING_EPSG:
-            gdf = gdf.to_crs(epsg=self.WORKING_EPSG)
-        logger.info(f"Loaded {len(gdf):,} plots")
+        self.working_epsg = compute_working_epsg(gdf, self.fallback_epsg)
+        if gdf.crs is None or gdf.crs.to_epsg() != self.working_epsg:
+            gdf = gdf.to_crs(epsg=self.working_epsg)
+        logger.info(f"Loaded {len(gdf):,} plots | working CRS: EPSG:{self.working_epsg}")
         report["input_file"] = latest
         report["total_plots"] = len(gdf)
+        report["working_epsg"] = self.working_epsg
         return gdf
 
     def _assign_final_status(
@@ -176,7 +181,7 @@ class Phase2FinalStatusAssigner:
         self, gdf: gpd.GeoDataFrame, run_id: str, report: dict
     ) -> None:
         self.outputs_dir.mkdir(parents=True, exist_ok=True)
-        gdf_out = gdf.to_crs(epsg=self.OUTPUT_EPSG)
+        gdf_out = gdf.to_crs(epsg=self.output_epsg)
         status_map = {
             self.FULLY_ELIGIBLE:   "2E_eligible_plots",
             self.PARTIALLY_ELIGIBLE: "2E_partial_plots",
@@ -301,7 +306,7 @@ class Phase2FinalStatusAssigner:
         try:
             import folium
             logger.info("Generating Phase 2 eligibility map...")
-            gdf_wgs = gdf.to_crs(epsg=self.OUTPUT_EPSG)
+            gdf_wgs = gdf.to_crs(epsg=self.output_epsg)
             bounds = gdf_wgs.total_bounds
             center = [
                 (bounds[1] + bounds[3]) / 2,
@@ -317,8 +322,8 @@ class Phase2FinalStatusAssigner:
                 self.INELIGIBLE:         "#e74c3c",
             }
             sample = (
-                gdf_wgs.sample(n=3000, random_state=42)
-                if len(gdf_wgs) > 3000 else gdf_wgs
+                gdf_wgs.sample(n=self.map_sample_size, random_state=42)
+                if len(gdf_wgs) > self.map_sample_size else gdf_wgs
             )
             for _, row in sample.iterrows():
                 if row.geometry is None:

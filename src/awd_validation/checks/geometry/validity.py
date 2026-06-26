@@ -36,6 +36,7 @@ class GeometryValidator:
         self.interim_dir = Path(config.input["interim_dir"])
         self.outputs_dir = Path(config.input["outputs_dir"])
         self.sliver_ha   = config.thresholds["sliver_area_ha"]
+        self.output_epsg = config.crs.get("output_epsg", 4326)
         # Area threshold check disabled
         self.area_threshold_enabled = config.checks.get(
             "area_threshold", False
@@ -55,6 +56,7 @@ class GeometryValidator:
 
         gdf = self._load_input(run_id, report)
         gdf = self._check_null_geometry(gdf, report)
+        gdf = self._check_multipolygon(gdf, report)
         gdf = self._check_validity(gdf, report)
         gdf = self._check_simplicity(gdf, report)
         gdf = self._check_degenerate(gdf, report)
@@ -120,6 +122,46 @@ class GeometryValidator:
             "status": "PASS" if count == 0 else "WARNING",
             "null_count": count,
             "plot_ids": list(gdf.loc[null_mask, "plot_id"].values),
+        }
+        return gdf
+
+    def _check_multipolygon(
+        self, gdf: gpd.GeoDataFrame, report: dict
+    ) -> gpd.GeoDataFrame:
+        logger.info("Check — MultiPolygon detection...")
+        gdf = gdf.copy()
+        has_geom = gdf.geometry.notna()
+        gdf["chk_multipolygon"] = False
+        gdf["chk_multipolygon_reason"] = ""
+        gdf["chk_multipolygon_part_count"] = 0
+        gdf["chk_multipolygon_centroids"] = ""
+
+        mp_mask = has_geom & (gdf.geometry.geom_type == "MultiPolygon")
+        count = int(mp_mask.sum())
+
+        if count > 0:
+            gdf.loc[mp_mask, "chk_multipolygon"] = True
+            for idx in gdf.loc[mp_mask].index:
+                geom = gdf.at[idx, "geometry"]
+                parts = list(geom.geoms)
+                centroids = [
+                    f"({p.centroid.x:.6f},{p.centroid.y:.6f})" for p in parts
+                ]
+                gdf.at[idx, "chk_multipolygon_reason"] = (
+                    f"MultiPolygon detected — one ID has {len(parts)} separate farm shapes"
+                )
+                gdf.at[idx, "chk_multipolygon_part_count"] = len(parts)
+                gdf.at[idx, "chk_multipolygon_centroids"] = "; ".join(centroids)
+                logger.warning(
+                    f"  MULTIPOLYGON — plot_id: {gdf.at[idx, 'plot_id']} | "
+                    f"parts: {len(parts)}"
+                )
+
+        logger.info(f"  MultiPolygon geometries: {count}")
+        report["checks"]["multipolygon"] = {
+            "status": "PASS" if count == 0 else "FAIL",
+            "multipolygon_count": count,
+            "plot_ids": list(gdf.loc[mp_mask, "plot_id"].values[:50]),
         }
         return gdf
 
@@ -236,18 +278,18 @@ class GeometryValidator:
         self, gdf: gpd.GeoDataFrame, report: dict
     ) -> gpd.GeoDataFrame:
         """
-        FAIL    → null geometry, invalid geometry, non-simple
-        PASS    → all checks clean
-        No WARNING — area threshold disabled
+        NEEDS_REVIEW → null geometry, invalid geometry, non-simple, MultiPolygon
+        PASS         → all checks clean
         """
         gdf = gdf.copy()
-        critical_fail = (
+        needs_review = (
             gdf["chk_null_geom"] |
             ~gdf["chk_is_valid"] |
-            ~gdf["chk_is_simple"]
+            ~gdf["chk_is_simple"] |
+            gdf["chk_multipolygon"]
         )
         gdf["phase_1b_status"] = "PASS"
-        gdf.loc[critical_fail, "phase_1b_status"] = "FAIL"
+        gdf.loc[needs_review, "phase_1b_status"] = "NEEDS_REVIEW"
         status_counts = gdf["phase_1b_status"].value_counts().to_dict()
         report["phase_1b_status_summary"] = status_counts
         return gdf
@@ -275,7 +317,7 @@ class GeometryValidator:
         if len(error_gdf) == 0:
             logger.info("No error geometries to export — all PASS")
             return
-        error_gdf = error_gdf.to_crs(epsg=4326)
+        error_gdf = error_gdf.to_crs(epsg=self.output_epsg)
         output_path = (
             self.outputs_dir /
             f"1B_error_geometries_{run_id}.gpkg"
@@ -320,6 +362,9 @@ class GeometryValidator:
             "phase_1b_status",
             "chk_null_geom",
             "chk_null_geom_reason",
+            "chk_multipolygon",
+            "chk_multipolygon_reason",
+            "chk_multipolygon_part_count",
             "chk_is_valid",
             "chk_is_valid_reason",
             "chk_is_simple",

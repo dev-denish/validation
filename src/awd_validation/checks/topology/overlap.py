@@ -15,7 +15,14 @@ class OverlapDetector:
         self.config = config
         self.interim_dir = Path(config.input["interim_dir"])
         self.outputs_dir = Path(config.input["outputs_dir"])
+        self.output_epsg = config.crs.get("output_epsg", 4326)
         self.overlap_pct_threshold = config.thresholds["overlap_area_pct"]
+        self.overlap_minor_fraction = config.thresholds.get(
+            "overlap_minor_fraction", 0.10
+        )
+        self.overlap_significant_fraction = config.thresholds.get(
+            "overlap_significant_fraction", 0.50
+        )
 
     def run(self, run_id: str) -> Tuple[gpd.GeoDataFrame, dict]:
         logger.info("=" * 60)
@@ -62,11 +69,15 @@ class OverlapDetector:
         )
 
         gdf = gdf.copy()
-        gdf["chk_overlap"]          = False
-        gdf["chk_overlap_area_ha"]  = 0.0
-        gdf["chk_overlap_pct"]      = 0.0
-        gdf["chk_overlap_severity"] = ""
-        gdf["chk_overlap_partners"] = ""
+        gdf["chk_overlap"]                = False
+        gdf["chk_overlap_area_ha"]        = 0.0
+        gdf["chk_overlap_area_sqm"]       = 0.0
+        gdf["chk_overlap_total_area_ha"]  = 0.0
+        gdf["chk_overlap_total_area_sqm"] = 0.0
+        gdf["chk_overlap_pct"]            = 0.0
+        gdf["chk_overlap_severity"]       = ""
+        gdf["chk_overlap_partners"]       = ""
+        gdf["chk_overlap_partner_count"]  = 0
 
         # Only process valid geometries
         valid_mask = gdf.geometry.notna() & gdf.geometry.is_valid
@@ -138,21 +149,23 @@ class OverlapDetector:
                 if overlap_pct <= self.overlap_pct_threshold:
                     continue
 
-                # Classify severity
-                if overlap_pct < 0.10:
+                # Classify severity — thresholds from settings.yaml
+                if overlap_pct < self.overlap_minor_fraction:
                     severity = "MINOR"
                     overlap_counts["minor"] += 1
-                elif overlap_pct < 0.50:
+                elif overlap_pct < self.overlap_significant_fraction:
                     severity = "SIGNIFICANT"
                     overlap_counts["significant"] += 1
                 else:
                     severity = "MAJOR"
                     overlap_counts["major"] += 1
 
+                overlap_sqm = round(float(overlap_area_ha * 10000), 4)
                 overlap_pairs.append({
                     "plot_id_1":       pid_i,
                     "plot_id_2":       pid_j,
                     "overlap_area_ha": round(float(overlap_area_ha), 6),
+                    "overlap_area_sqm": overlap_sqm,
                     "overlap_pct":     round(float(overlap_pct), 4),
                     "severity":        severity,
                 })
@@ -173,10 +186,11 @@ class OverlapDetector:
             for pid in [pair["plot_id_1"], pair["plot_id_2"]]:
                 if pid not in plot_overlap_data:
                     plot_overlap_data[pid] = {
-                        "max_overlap_ha":  0.0,
-                        "max_overlap_pct": 0.0,
-                        "max_severity":    "",
-                        "partners":        [],
+                        "max_overlap_ha":   0.0,
+                        "max_overlap_pct":  0.0,
+                        "max_severity":     "",
+                        "total_overlap_ha": 0.0,
+                        "partners":         [],
                     }
                 d = plot_overlap_data[pid]
                 partner = pair["plot_id_2"] if pid == pair["plot_id_1"] else pair["plot_id_1"]
@@ -184,15 +198,22 @@ class OverlapDetector:
                     d["max_overlap_ha"]  = pair["overlap_area_ha"]
                     d["max_overlap_pct"] = pair["overlap_pct"]
                     d["max_severity"]    = pair["severity"]
+                d["total_overlap_ha"] += pair["overlap_area_ha"]
                 d["partners"].append(partner)
 
         for pid, data in plot_overlap_data.items():
             match = gdf["plot_id"] == pid
-            gdf.loc[match, "chk_overlap"]          = True
-            gdf.loc[match, "chk_overlap_area_ha"]  = data["max_overlap_ha"]
-            gdf.loc[match, "chk_overlap_pct"]      = data["max_overlap_pct"]
-            gdf.loc[match, "chk_overlap_severity"] = data["max_severity"]
-            gdf.loc[match, "chk_overlap_partners"] = ", ".join(data["partners"][:5])
+            total_sqm = round(data["total_overlap_ha"] * 10000, 4)
+            max_sqm   = round(data["max_overlap_ha"] * 10000, 4)
+            gdf.loc[match, "chk_overlap"]                = True
+            gdf.loc[match, "chk_overlap_area_ha"]        = data["max_overlap_ha"]
+            gdf.loc[match, "chk_overlap_area_sqm"]       = max_sqm
+            gdf.loc[match, "chk_overlap_total_area_ha"]  = data["total_overlap_ha"]
+            gdf.loc[match, "chk_overlap_total_area_sqm"] = total_sqm
+            gdf.loc[match, "chk_overlap_pct"]            = data["max_overlap_pct"]
+            gdf.loc[match, "chk_overlap_severity"]       = data["max_severity"]
+            gdf.loc[match, "chk_overlap_partners"]       = ", ".join(data["partners"])
+            gdf.loc[match, "chk_overlap_partner_count"]  = len(data["partners"])
 
         total_pairs      = len(overlap_pairs)
         total_plots_flag = len(plot_overlap_data)
@@ -221,7 +242,7 @@ class OverlapDetector:
 
         gdf["phase_1e_status"] = "PASS"
         gdf.loc[minor_only, "phase_1e_status"] = "WARNING"
-        gdf.loc[major_sig,  "phase_1e_status"] = "FAIL"
+        gdf.loc[major_sig,  "phase_1e_status"] = "NEEDS_REVIEW"
 
         status_counts = gdf["phase_1e_status"].value_counts().to_dict()
         report["phase_1e_status_summary"] = status_counts
@@ -240,7 +261,7 @@ class OverlapDetector:
         if len(error_gdf) == 0:
             logger.info("No overlap geometries to export")
             return
-        error_gdf = error_gdf.to_crs(epsg=4326)
+        error_gdf = error_gdf.to_crs(epsg=self.output_epsg)
         output_path = self.outputs_dir / f"1E_overlap_plots_{run_id}.gpkg"
         self.outputs_dir.mkdir(parents=True, exist_ok=True)
         error_gdf.to_file(output_path, driver="GPKG", layer="overlap_plots")
@@ -258,9 +279,10 @@ class OverlapDetector:
         report_path = self.outputs_dir / f"1E_topology_report_{run_id}.csv"
         report_cols = [
             "plot_id", "area_ha", "phase_1e_status",
-            "chk_overlap", "chk_overlap_area_ha",
+            "chk_overlap", "chk_overlap_area_ha", "chk_overlap_area_sqm",
+            "chk_overlap_total_area_ha", "chk_overlap_total_area_sqm",
             "chk_overlap_pct", "chk_overlap_severity",
-            "chk_overlap_partners",
+            "chk_overlap_partner_count", "chk_overlap_partners",
         ]
         available = [c for c in report_cols if c in gdf.columns]
         report_df = gdf[available].copy()

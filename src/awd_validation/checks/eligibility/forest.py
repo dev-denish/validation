@@ -26,6 +26,8 @@ from loguru import logger
 from shapely.ops import unary_union
 from shapely.validation import make_valid
 
+from awd_validation.utils.config import compute_working_epsg
+
 
 class ForestOverlapChecker:
     """
@@ -41,13 +43,13 @@ class ForestOverlapChecker:
         and phase_2a_status = SKIPPED for full traceability.
     """
 
-    WORKING_EPSG = 32643
-    OUTPUT_EPSG = 4326
-
     def __init__(self, config) -> None:
         self.config = config
         self.interim_dir = Path(config.input["interim_dir"])
         self.outputs_dir = Path(config.input["outputs_dir"])
+        self.output_epsg = config.crs.get("output_epsg", 4326)
+        self.fallback_epsg = config.crs.get("fallback_working_epsg", 32644)
+        self.working_epsg: int = self.fallback_epsg  # set dynamically in _load_input
         self.phase2_cfg = config.get("phase2", default={})
         self.forest_cfg = self.phase2_cfg.get("forest", {})
         self.enabled = self.forest_cfg.get("enabled", False)
@@ -55,7 +57,14 @@ class ForestOverlapChecker:
         self.definition_source = self.forest_cfg.get(
             "definition_source", "pending"
         )
-        self.cdm_min_area_ha = self.forest_cfg.get("cdm_min_area_ha", 0.5)
+        self.cdm_min_area_ha = self.forest_cfg.get(
+            "minimum_forest_area_ha",
+            self.forest_cfg.get("cdm_min_area_ha", 1.0),
+        )
+        self.canopy_pct = self.forest_cfg.get(
+            "canopy_density_threshold_pct",
+            self.forest_cfg.get("cdm_canopy_pct", 10),
+        )
         self.hansen_layer_path = self.forest_cfg.get("hansen_layer_path")
         self.hansen_enabled = self.forest_cfg.get("hansen_enabled", False)
 
@@ -121,10 +130,11 @@ class ForestOverlapChecker:
         latest = files[-1]
         logger.info(f"Loading Phase 1F valid plots: {Path(latest).name}")
         gdf = gpd.read_file(latest)
-        # Ensure working CRS for spatial operations
-        if gdf.crs.to_epsg() != self.WORKING_EPSG:
-            gdf = gdf.to_crs(epsg=self.WORKING_EPSG)
-        logger.info(f"Loaded {len(gdf):,} valid plots | CRS: EPSG:{self.WORKING_EPSG}")
+        # Compute UTM zone dynamically from data centroid
+        self.working_epsg = compute_working_epsg(gdf, self.fallback_epsg)
+        if gdf.crs is None or gdf.crs.to_epsg() != self.working_epsg:
+            gdf = gdf.to_crs(epsg=self.working_epsg)
+        logger.info(f"Loaded {len(gdf):,} valid plots | working CRS: EPSG:{self.working_epsg}")
         report["input_file"] = latest
         report["total_plots"] = len(gdf)
         return gdf
@@ -155,8 +165,8 @@ class ForestOverlapChecker:
                 f"{len(forest_gdf):,} features retained "
                 f"(dropped {before_state - len(forest_gdf)} from other states)"
             )
-        if forest_gdf.crs.to_epsg() != self.WORKING_EPSG:
-            forest_gdf = forest_gdf.to_crs(epsg=self.WORKING_EPSG)
+        if forest_gdf.crs.to_epsg() != self.working_epsg:
+            forest_gdf = forest_gdf.to_crs(epsg=self.working_epsg)
         # Validate geometry
         invalid = (~forest_gdf.geometry.is_valid).sum()
         if invalid > 0:
@@ -194,8 +204,8 @@ class ForestOverlapChecker:
             return None
         logger.info(f"Loading Hansen canopy layer: {layer_path.name}")
         hansen_gdf = gpd.read_file(layer_path)
-        if hansen_gdf.crs.to_epsg() != self.WORKING_EPSG:
-            hansen_gdf = hansen_gdf.to_crs(epsg=self.WORKING_EPSG)
+        if hansen_gdf.crs.to_epsg() != self.working_epsg:
+            hansen_gdf = hansen_gdf.to_crs(epsg=self.working_epsg)
         invalid = (~hansen_gdf.geometry.is_valid).sum()
         if invalid > 0:
             logger.warning(
@@ -204,13 +214,13 @@ class ForestOverlapChecker:
             hansen_gdf["geometry"] = hansen_gdf.geometry.apply(make_valid)
         logger.info(
             f"Hansen canopy layer loaded: {len(hansen_gdf):,} polygons "
-            f"(≥10% canopy cover, ≥1.0 ha)"
+            f"(>={self.canopy_pct}% canopy cover, >={self.cdm_min_area_ha} ha)"
         )
         report["hansen_layer"] = {
             "path": str(layer_path),
             "polygons": len(hansen_gdf),
-            "threshold_canopy_pct": 10,
-            "min_area_ha": 1.0,
+            "threshold_canopy_pct": self.canopy_pct,
+            "min_area_ha": self.cdm_min_area_ha,
         }
         return hansen_gdf
 
@@ -404,7 +414,7 @@ class ForestOverlapChecker:
         output_path = (
             self.interim_dir / f"2A_plots_forest_checked_{run_id}.gpkg"
         )
-        gdf.to_crs(epsg=self.OUTPUT_EPSG).to_file(
+        gdf.to_crs(epsg=self.output_epsg).to_file(
             output_path, driver="GPKG", layer="plots_forest_checked"
         )
         logger.info(f"Output written: {output_path.name}")
