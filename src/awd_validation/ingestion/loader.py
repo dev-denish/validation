@@ -9,7 +9,6 @@ import geopandas as gpd
 import fiona
 import pandas as pd
 from shapely.geometry import shape, mapping
-from shapely.validation import make_valid
 import pyproj
 from loguru import logger
 from typing import Tuple
@@ -20,13 +19,21 @@ fiona.drvsupport.supported_drivers["KML"] = "rw"
 fiona.drvsupport.supported_drivers["LIBKML"] = "rw"
 
 
+def get_utm_epsg(lon: float, lat: float) -> str:
+    """Return EPSG code for the UTM zone containing the given lon/lat."""
+    zone = int((lon + 180) / 6) + 1
+    if lat >= 0:
+        return f"EPSG:{32600 + zone}"
+    else:
+        return f"EPSG:{32700 + zone}"
+
+
 class KMLLoader:
     """
     Handles ingestion of KML plot files for AWD validation.
     """
 
     REQUIRED_FIELDS = ["Name"]
-    WORKING_EPSG = 32643
     OUTPUT_EPSG = 4326
 
     def __init__(self, config):
@@ -36,8 +43,8 @@ class KMLLoader:
         self.filename = config.input["filename"]
         self.layer = config.input["layer"]
         self.unique_id_field = config.schema["unique_id_field"]
-        self.working_epsg = config.crs["working_epsg"]
         self.input_epsg = config.crs["input_epsg"]
+        self.working_epsg = config.crs["working_epsg"]
 
     def run(self, run_id: str) -> Tuple[gpd.GeoDataFrame, dict]:
         logger.info("=" * 60)
@@ -271,23 +278,31 @@ class KMLLoader:
         }
 
     def _reproject(self, gdf: gpd.GeoDataFrame, report: dict) -> gpd.GeoDataFrame:
-        logger.info(
-            f"Reprojecting EPSG:{self.input_epsg} → EPSG:{self.working_epsg}..."
-        )
-
         if gdf.crs is None:
             gdf = gdf.set_crs(epsg=self.input_epsg)
 
-        gdf_projected = gdf.to_crs(epsg=self.working_epsg)
+        valid_geoms = gdf[gdf.geometry.notna()]
+        if len(valid_geoms) > 0:
+            all_centroids = valid_geoms.geometry.centroid
+            mean_lon = float(all_centroids.x.mean())
+            mean_lat = float(all_centroids.y.mean())
+            target_epsg = get_utm_epsg(mean_lon, mean_lat)
+        else:
+            target_epsg = f"EPSG:{self.working_epsg}"
+
+        logger.info(f"Reprojecting EPSG:{self.input_epsg} → {target_epsg} (dynamic UTM)...")
+        gdf_projected = gdf.to_crs(target_epsg)
+        epsg_num = int(target_epsg.split(":")[1])
+        gdf_projected["working_crs_epsg"] = epsg_num
 
         report["checks"]["reprojection"] = {
             "status": "PASS",
             "from_epsg": self.input_epsg,
-            "to_epsg": self.working_epsg,
-            "crs_name": "UTM Zone 43N",
+            "to_epsg": epsg_num,
+            "crs_detected": target_epsg,
         }
 
-        logger.info(f"Reprojection complete — working CRS: EPSG:{self.working_epsg}")
+        logger.info(f"Reprojection complete — working CRS: {target_epsg}")
         return gdf_projected
 
     def _add_metadata_columns(
@@ -298,7 +313,6 @@ class KMLLoader:
         gdf["run_id"] = run_id
         gdf["ingestion_timestamp"] = datetime.utcnow().isoformat()
         gdf["source_file"] = self.filename
-        gdf["working_crs_epsg"] = self.working_epsg
         gdf["phase_1a_status"] = gdf["_geom_load_status"].apply(
             lambda s: "FAIL" if s != "OK" else "PASS"
         )

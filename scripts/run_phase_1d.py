@@ -23,8 +23,8 @@ def main():
 
     summary = report.get("phase_1d_status_summary", {})
     logger.info("Phase 1D complete.")
-    logger.info(f"  PASS:  {summary.get('PASS', 0):,}")
-    logger.info(f"  FAIL:  {summary.get('FAIL', 0):,}")
+    logger.info(f"  PASS:          {summary.get('PASS', 0):,}")
+    logger.info(f"  NEEDS_REVIEW:  {summary.get('NEEDS_REVIEW', 0):,}")
     return 0
 
 

@@ -23,10 +23,11 @@ def main():
 
     summary = report.get("final_status_summary", {})
     logger.info("Phase 1F complete.")
-    logger.info(f"  ELIGIBLE:           {summary.get('ELIGIBLE', {}).get('count', 0):,}")
-    logger.info(f"  PARTIALLY_ELIGIBLE: {summary.get('PARTIALLY_ELIGIBLE', {}).get('count', 0):,}")
-    logger.info(f"  NEEDS_REVIEW:       {summary.get('NEEDS_REVIEW', {}).get('count', 0):,}")
-    logger.info(f"  INELIGIBLE:         {summary.get('INELIGIBLE', {}).get('count', 0):,}")
+    logger.info(f"  ELIGIBLE:            {summary.get('ELIGIBLE', {}).get('count', 0):,}")
+    logger.info(f"  PARTIALLY_ELIGIBLE:  {summary.get('PARTIALLY_ELIGIBLE', {}).get('count', 0):,}")
+    logger.info(f"  NEEDS_REVIEW:        {summary.get('NEEDS_REVIEW', {}).get('count', 0):,}")
+    logger.info(f"  INELIGIBLE:          {summary.get('INELIGIBLE', {}).get('count', 0):,}")
+    logger.info(f"  plain-english Excel: /app/data/outputs/phase1_results.xlsx")
     return 0
 
 

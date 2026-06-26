@@ -136,7 +136,7 @@ class SpatialDuplicateDetector:
         gdf = gdf.copy()
         spatial_dup = gdf["chk_centroid_duplicate"] | gdf["chk_area_centroid_match"]
         gdf["phase_1d_status"] = "PASS"
-        gdf.loc[spatial_dup, "phase_1d_status"] = "FAIL"
+        gdf.loc[spatial_dup, "phase_1d_status"] = "NEEDS_REVIEW"
         status_counts = gdf["phase_1d_status"].value_counts().to_dict()
         report["phase_1d_status_summary"] = status_counts
         return gdf

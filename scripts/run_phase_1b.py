@@ -23,9 +23,8 @@ def main():
 
     summary = report.get("phase_1b_status_summary", {})
     logger.info("Phase 1B complete.")
-    logger.info(f"  PASS:    {summary.get('PASS', 0):,}")
-    logger.info(f"  WARNING: {summary.get('WARNING', 0):,}")
-    logger.info(f"  FAIL:    {summary.get('FAIL', 0):,}")
+    logger.info(f"  PASS:          {summary.get('PASS', 0):,}")
+    logger.info(f"  NEEDS_REVIEW:  {summary.get('NEEDS_REVIEW', 0):,}")
     logger.info(
         f"Output: /app/data/interim/1B_plots_geometry_checked_{run_id}.gpkg"
     )

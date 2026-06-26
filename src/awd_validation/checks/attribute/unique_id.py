@@ -40,6 +40,7 @@ class UniqueIDValidator:
         }
 
         gdf = self._load_input(run_id, report)
+        gdf = self._detect_id_format(gdf)
         gdf = self._check_id_format(gdf, report)
         gdf = self._check_special_characters(gdf, report)
         gdf = self._check_exact_id_duplicates(gdf, report)
@@ -68,6 +69,25 @@ class UniqueIDValidator:
         report["total_plots"] = len(gdf)
         return gdf
 
+    def _detect_id_format(self, gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+        """Add id_format column: FAMH, BB, or UNKNOWN — uses exact raw ID string."""
+        gdf = gdf.copy()
+        primary_re   = re.compile(self.primary_pattern)
+        alternate_re = re.compile(self.alternate_pattern)
+
+        def classify(plot_id: str) -> str:
+            s = str(plot_id).strip()
+            if alternate_re.match(s):
+                return "FAMH"
+            if primary_re.match(s):
+                return "BB"
+            return "UNKNOWN"
+
+        gdf["id_format"] = gdf["plot_id"].apply(classify)
+        counts = gdf["id_format"].value_counts().to_dict()
+        logger.info(f"  ID format breakdown: {counts}")
+        return gdf
+
     def _check_id_format(
         self, gdf: gpd.GeoDataFrame, report: dict
     ) -> gpd.GeoDataFrame:
@@ -75,6 +95,7 @@ class UniqueIDValidator:
         Validate ID against two known patterns:
           Primary:   N-N-A-N  e.g. 63-03-BB-27064
           Alternate: FAMH...  e.g. FAMHDB2023887213
+        Full exact string checked — no normalisation applied.
         """
         logger.info("Check 1/4 — ID format validation...")
 
@@ -246,7 +267,7 @@ class UniqueIDValidator:
 
         gdf["phase_1c_status"] = "PASS"
         gdf.loc[warning,  "phase_1c_status"] = "WARNING"
-        gdf.loc[critical, "phase_1c_status"] = "FAIL"
+        gdf.loc[critical, "phase_1c_status"] = "NEEDS_REVIEW"
 
         status_counts = gdf["phase_1c_status"].value_counts().to_dict()
         report["phase_1c_status_summary"] = status_counts
@@ -272,6 +293,7 @@ class UniqueIDValidator:
 
         report_cols = [
             "plot_id",
+            "id_format",
             "phase_1c_status",
             "chk_id_format",
             "chk_id_format_reason",
